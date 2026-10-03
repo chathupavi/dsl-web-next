@@ -1,8 +1,13 @@
 import Link from "next/link";
 import DashboardDateRange from "@/components/admin/DashboardDateRange";
-import RevenueChart from "@/components/admin/RevenueChart";
 import ServiceAnalyticsCharts from "@/components/admin/ServiceAnalyticsCharts";
-import { getFinancialIntelligenceData, money, formatDate } from "@/lib/admin-data";
+import FinancialChartSection from "@/components/admin/FinancialChartSection";
+import {
+  getFinancialIntelligenceData,
+  getStrategicActionsWithAttribution,
+  money,
+  formatDate,
+} from "@/lib/admin-data";
 
 export const dynamic = "force-dynamic";
 
@@ -54,12 +59,18 @@ function MetricHealthBadge({ status }) {
 
 export default async function FinancialIntelligencePage({ searchParams }) {
   const params = await searchParams;
+  const twoDecimals = (value) => Number(value || 0).toFixed(2);
 
-  const data = await getFinancialIntelligenceData({
-    from: params?.from,
-    to: params?.to,
-  });
-
+  const [data, strategicActions] = await Promise.all([
+    getFinancialIntelligenceData({
+      from: params?.from,
+      to: params?.to,
+    }),
+    getStrategicActionsWithAttribution({
+      from: params?.from,
+      to: params?.to,
+    }),
+  ]);
   return (
     <div className="space-y-[22px]">
       {/* =====================================================
@@ -103,7 +114,7 @@ export default async function FinancialIntelligencePage({ searchParams }) {
                 Operating Margin
               </div>
               <div className="text-[22px] font-extrabold text-[#1C3B57]">
-                {data.netProfitMargin}%
+                {twoDecimals(data.netProfitMargin)}%
               </div>
             </div>
           </div>
@@ -134,7 +145,7 @@ export default async function FinancialIntelligencePage({ searchParams }) {
 
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-[32px] font-extrabold tracking-tight text-[#1C3B57]">
-              {data.netProfitMargin}%
+              {twoDecimals(data.netProfitMargin)}%
             </span>
           </div>
 
@@ -157,7 +168,7 @@ export default async function FinancialIntelligencePage({ searchParams }) {
 
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-[32px] font-extrabold tracking-tight text-[#1C3B57]">
-              {data.operatingExpenseRatio}%
+              {twoDecimals(data.operatingExpenseRatio)}%
             </span>
           </div>
 
@@ -180,7 +191,7 @@ export default async function FinancialIntelligencePage({ searchParams }) {
 
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-[32px] font-extrabold tracking-tight text-[#A74A4A]">
-              {data.rejectionDragRatio}%
+              {twoDecimals(data.rejectionDragRatio)}%
             </span>
           </div>
 
@@ -382,14 +393,20 @@ export default async function FinancialIntelligencePage({ searchParams }) {
       </section>
 
       {/* =====================================================
-          TIER 3: REVENUE MOMENTUM & SERVICE PORTFOLIO
+          TIER 3: ANNOTATED TIMELINE & IMPACT ATTRIBUTION
       ===================================================== */}
-      <RevenueChart
-        daily={data.dailyRevenue || []}
-        monthly={data.monthlyRevenue || []}
-      />
+      <section>
+        <FinancialChartSection
+        dailyRevenue={data.dailyRevenue || []}
+        monthlyRevenue={data.monthlyRevenue || []}
+        strategicActions={strategicActions || []}
+        selectedDays={data.selectedDays || 0}
+        />
+      </section>
 
-      {/* Service Portfolio Contribution & Monthly Demand */}
+      {/* =====================================================
+          SERVICE PORTFOLIO CONTRIBUTION & MONTHLY DEMAND
+      ===================================================== */}
       <section>
         <ServiceAnalyticsCharts
           serviceBreakdown={data.serviceBreakdown || []}

@@ -1080,108 +1080,674 @@ function createMonthlyRevenue(orders) {
     });
 }
 
+
 /* =========================================================
-   SHOE LAUNDRY WALK-IN COUNTER & SERVICE BUNDLING ENGINE
+   EXECUTIVE FINANCIAL & COUNTER INTELLIGENCE ENGINE
 ========================================================= */
 
 export async function getFinancialIntelligenceData({ session, from, to } = {}) {
-  if (session) assertAuthorized(session, ["admin"]);
+  console.log(
+    "%c🔥 getFinancialIntelligenceData() WAS CALLED",
+    "color:#fff;background:#dc2626;font-size:16px;font-weight:bold;padding:6px 10px;"
+  );
 
-  const baseData = await getDashboardData({ session, from, to });
+  console.log("[Financial Intelligence] from:", from);
+  console.log("[Financial Intelligence] to:", to);
+  console.log("[Financial Intelligence] session role:", session?.role);
 
-  const grossRevenue = Number(baseData.totalRevenue || 0);
-  const overheadExpenses = Number(baseData.totalExpenses || 0);
-  const rejectionLoss = Number(baseData.totalRejectionCost || 0);
-  const netOperatingProfit = Number(baseData.netRevenue || 0);
-  const totalOrders = Number(baseData.totalOrders || 0);
-  const activeOrders = Number(baseData.activeOrdersCount || 0);
-  const rejectedOrders = Number(baseData.rejectedOrdersCount || 0);
-  const totalServicesRequested = Number(baseData.totalServicesRequestedCount || 0);
+  if (session) {
+    assertAuthorized(session, ["admin"]);
+  }
 
-  // 1. Walk-in Counter Financial Ratios
-  const netProfitMargin = grossRevenue > 0
-    ? Number(((netOperatingProfit / grossRevenue) * 100).toFixed(1))
-    : 0;
-
-  const operatingExpenseRatio = grossRevenue > 0
-    ? Number(((overheadExpenses / grossRevenue) * 100).toFixed(1))
-    : 0;
-
-  const rejectionDragRatio = grossRevenue > 0
-    ? Number(((rejectionLoss / grossRevenue) * 100).toFixed(2))
-    : 0;
-
-  // 2. Unit Economics: Multi-Service Bundling per Pair
-  const aov = activeOrders > 0 ? Math.round(grossRevenue / activeOrders) : 0;
-  const netProfitPerPair = activeOrders > 0 ? Math.round(netOperatingProfit / activeOrders) : 0;
-  const servicesPerPair = activeOrders > 0 ? (totalServicesRequested / activeOrders).toFixed(1) : "1.0";
-  const averageRejectionCost = rejectedOrders > 0 ? Math.round(rejectionLoss / rejectedOrders) : 0;
-
-  // 3. Benchmarks for In-Store Counter Operations
-  const marginHealth = netProfitMargin >= 55 ? "Optimal" : netProfitMargin >= 42 ? "Healthy" : "Compressed";
-  const expenseHealth = operatingExpenseRatio <= 32 ? "Lean Bench" : operatingExpenseRatio <= 45 ? "Moderate" : "High Burn";
-  const leakageHealth = rejectionDragRatio <= 1.5 ? "Clean Intake" : rejectionDragRatio <= 3.0 ? "Counter Leaks" : "Inspection Drag";
-
-  // 4. MoM Growth Velocity
-  const monthlyTrends = (baseData.monthlyRevenue || []).map((curr, idx, arr) => {
-    const prev = arr[idx - 1];
-    let momRevenueGrowth = 0;
-    let momOrdersGrowth = 0;
-
-    if (prev && prev.revenue > 0) {
-      momRevenueGrowth = Number((((curr.revenue - prev.revenue) / prev.revenue) * 100).toFixed(1));
-    }
-    if (prev && prev.orders > 0) {
-      momOrdersGrowth = Number((((curr.orders - prev.orders) / prev.orders) * 100).toFixed(1));
-    }
-
-    return {
-      ...curr,
-      momRevenueGrowth,
-      momOrdersGrowth,
-      aov: curr.orders > 0 ? Math.round(curr.revenue / curr.orders) : 0,
-    };
+  // ------------------------------------------------------------
+  // 1. LOAD BASE DASHBOARD DATA
+  // ------------------------------------------------------------
+  const baseData = await getDashboardData({
+    session,
+    from,
+    to,
   });
 
-  // 5. WALK-IN DROP-OFF SPECIFIC GROWTH SIMULATIONS
-  // Lever 1: Counter Upsell (Add-On Service Attachment)
-  // When dropping off for a standard clean, staff upsells an add-on (e.g., Sole De-Yellowing or Nanotech Protection @ LKR 650) on 30% of pairs
-  const counterUpsellLift = Math.round(activeOrders * 0.30 * 650);
+  console.log(
+    "%c[Financial Intelligence] BASE DATA RECEIVED",
+    "color:#2563eb;font-weight:bold;"
+  );
 
-  // Lever 2: Front-Desk Defect Triage Training
-  // Front counter staff catches crumbled soles and unserviceable tears BEFORE writing the intake ticket (recapturing 80% of wasted inspection time/supplies)
-  const counterTriageRecovery = Math.round(rejectionLoss * 0.80);
+  console.log(
+    "[Financial Intelligence] baseData.monthlyRevenue:",
+    baseData?.monthlyRevenue
+  );
 
-  // Lever 3: Bulk Supply & Solvent Sourcing
-  // Bulk purchasing of sneaker cleaning foams, microfiber sets, and suede brushes cuts shop OPEX by 15%
-  const supplyBulkSavings = Math.round(overheadExpenses * 0.15);
+  console.log(
+    "[Financial Intelligence] baseData.monthlyRevenue.length:",
+    baseData?.monthlyRevenue?.length
+  );
 
-  const levers = {
-    counterUpsellLift,
-    counterTriageRecovery,
-    supplyBulkSavings,
-    totalSimulatedLift: counterUpsellLift + counterTriageRecovery + supplyBulkSavings,
-  };
+  console.log(
+    "[Financial Intelligence] baseData.dailyRevenue.length:",
+    baseData?.dailyRevenue?.length
+  );
 
-  return {
+  // ------------------------------------------------------------
+  // 2. LOAD LIFETIME ORDERS
+  //
+  // This is intentionally separate from the selected dashboard
+  // date range because the financial monthly chart should be able
+  // to show the full available history.
+  // ------------------------------------------------------------
+  let allLifetimeOrders = [];
+
+  try {
+    allLifetimeOrders = await getOrders({
+      session,
+      limit: MAX_DASHBOARD_SCAN,
+      includePII: false,
+    });
+
+    console.log(
+      "%c[Financial Intelligence] LIFETIME ORDERS LOADED",
+      "color:#7c3aed;font-weight:bold;"
+    );
+
+    console.log(
+      "[Financial Intelligence] Lifetime orders count:",
+      allLifetimeOrders.length
+    );
+
+    if (allLifetimeOrders.length > 0) {
+      console.log(
+        "[Financial Intelligence] First lifetime order:",
+        allLifetimeOrders[0]
+      );
+
+      console.log(
+        "[Financial Intelligence] Last lifetime order:",
+        allLifetimeOrders[allLifetimeOrders.length - 1]
+      );
+    }
+  } catch (err) {
+    console.error(
+      "❌ Failed to load lifetime orders for monthly financial chart:",
+      err
+    );
+
+    allLifetimeOrders = [];
+  }
+
+  // ------------------------------------------------------------
+  // 3. BUILD MONTHLY SERIES
+  // ------------------------------------------------------------
+  function buildMonthlySeries(ordersList = []) {
+    const map = new Map();
+
+    if (!Array.isArray(ordersList) || ordersList.length === 0) {
+      console.warn(
+        "[Financial Intelligence] buildMonthlySeries received no orders."
+      );
+
+      return [];
+    }
+
+    let validDateCount = 0;
+    let rejectedCount = 0;
+    let validRevenueCount = 0;
+
+    for (let i = 0; i < ordersList.length; i++) {
+      const order = ordersList[i];
+
+      if (!order) continue;
+
+      const status = String(order.status || "").toLowerCase();
+
+      // Rejected orders should not contribute to revenue.
+      if (status === "rejected") {
+        rejectedCount++;
+        continue;
+      }
+
+      const orderDate = toDate(order.timestamp);
+
+      if (!orderDate) {
+        console.warn(
+          "[Financial Intelligence] Order has invalid timestamp:",
+          {
+            id: order.id,
+            orderId: order.orderId,
+            timestamp: order.timestamp,
+          }
+        );
+
+        continue;
+      }
+
+      validDateCount++;
+
+      // Colombo month key: YYYY-MM
+      const monthKey = new Intl.DateTimeFormat("en-CA", {
+        timeZone: COLOMBO_TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+      }).format(orderDate);
+
+      // Human-readable month label.
+      const monthLabel = new Intl.DateTimeFormat("en-LK", {
+        timeZone: COLOMBO_TIMEZONE,
+        month: "short",
+        year: "numeric",
+      }).format(orderDate);
+
+      const revenue = Number(effectiveRevenue(order) || 0);
+
+      if (Number.isFinite(revenue)) {
+        validRevenueCount++;
+      }
+
+      const existing = map.get(monthKey) || {
+        key: monthKey,
+        label: monthLabel,
+        revenue: 0,
+        orders: 0,
+      };
+
+      existing.revenue += Number.isFinite(revenue) ? revenue : 0;
+      existing.orders += 1;
+
+      map.set(monthKey, existing);
+    }
+
+    const result = Array.from(map.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((item) => ({
+        ...item,
+        revenue: Number(item.revenue || 0),
+        orders: Number(item.orders || 0),
+      }));
+
+    console.log(
+      "%c[Financial Intelligence] MONTHLY SERIES BUILT",
+      "color:#0891b2;font-weight:bold;"
+    );
+
+    console.log("[Financial Intelligence] Input orders:", ordersList.length);
+    console.log(
+      "[Financial Intelligence] Valid dates:",
+      validDateCount
+    );
+    console.log(
+      "[Financial Intelligence] Rejected orders skipped:",
+      rejectedCount
+    );
+    console.log(
+      "[Financial Intelligence] Orders with valid revenue:",
+      validRevenueCount
+    );
+    console.log(
+      "[Financial Intelligence] Monthly result count:",
+      result.length
+    );
+
+    if (result.length > 0) {
+      console.table(result);
+    } else {
+      console.error(
+        "❌ [Financial Intelligence] buildMonthlySeries produced EMPTY result."
+      );
+    }
+
+    return result;
+  }
+
+  // ------------------------------------------------------------
+  // 4. DETERMINE MONTHLY REVENUE
+  //
+  // Priority:
+  // A. Lifetime orders
+  // B. baseData.monthlyRevenue
+  // C. baseData.dailyRevenue converted to monthly
+  // ------------------------------------------------------------
+  let monthlyRevenue = [];
+
+  // A. Lifetime orders
+  if (
+    Array.isArray(allLifetimeOrders) &&
+    allLifetimeOrders.length > 0
+  ) {
+    console.log(
+      "%c[Financial Intelligence] Using lifetime orders for monthly chart",
+      "color:#16a34a;font-weight:bold;"
+    );
+
+    monthlyRevenue = buildMonthlySeries(allLifetimeOrders);
+  }
+
+  // B. Existing monthly data from dashboard
+  if (
+    (!monthlyRevenue || monthlyRevenue.length === 0) &&
+    Array.isArray(baseData?.monthlyRevenue) &&
+    baseData.monthlyRevenue.length > 0
+  ) {
+    console.log(
+      "%c[Financial Intelligence] Falling back to baseData.monthlyRevenue",
+      "color:#f59e0b;font-weight:bold;"
+    );
+
+    monthlyRevenue = baseData.monthlyRevenue.map((item) => ({
+      key: item.key,
+      label: item.label,
+      revenue: Number(item.revenue || 0),
+      orders: Number(item.orders || 0),
+    }));
+  }
+
+  // C. Convert daily revenue to monthly
+  if (
+    (!monthlyRevenue || monthlyRevenue.length === 0) &&
+    Array.isArray(baseData?.dailyRevenue) &&
+    baseData.dailyRevenue.length > 0
+  ) {
+    console.log(
+      "%c[Financial Intelligence] Converting dailyRevenue → monthlyRevenue",
+      "color:#f59e0b;font-weight:bold;"
+    );
+
+    const map = new Map();
+
+    for (const day of baseData.dailyRevenue) {
+      if (!day) continue;
+
+      const dayKey = String(day.key || "");
+
+      // Expected format: YYYY-MM-DD
+      const monthKey = dayKey.slice(0, 7);
+
+      if (!monthKey) continue;
+
+      const existing = map.get(monthKey) || {
+        key: monthKey,
+        label: monthKey,
+        revenue: 0,
+        orders: 0,
+      };
+
+      existing.revenue += Number(day.revenue || 0);
+      existing.orders += Number(day.orders || 0);
+
+      map.set(monthKey, existing);
+    }
+
+    monthlyRevenue = Array.from(map.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((item) => {
+        const [year, month] = item.key.split("-");
+
+        let label = item.key;
+
+        try {
+          label = new Intl.DateTimeFormat("en-LK", {
+            month: "short",
+            year: "numeric",
+          }).format(
+            new Date(
+              `${year}-${month}-01T12:00:00${COLOMBO_OFFSET}`
+            )
+          );
+        } catch {
+          // Keep YYYY-MM if formatting fails.
+        }
+
+        return {
+          key: item.key,
+          label,
+          revenue: Number(item.revenue || 0),
+          orders: Number(item.orders || 0),
+        };
+      });
+
+    console.log(
+      "[Financial Intelligence] Converted monthly data:",
+      monthlyRevenue
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 5. FINAL MONTHLY DATA DIAGNOSTICS
+  // ------------------------------------------------------------
+  console.group(
+    "%c🔥 FINAL FINANCIAL MONTHLY DATA",
+    "color:#fff;background:#16a34a;font-size:16px;font-weight:bold;padding:6px 10px;"
+  );
+
+  console.log("monthlyRevenue:", monthlyRevenue);
+  console.log(
+    "monthlyRevenue.length:",
+    monthlyRevenue?.length || 0
+  );
+
+  if (Array.isArray(monthlyRevenue) && monthlyRevenue.length > 0) {
+    console.table(
+      monthlyRevenue.map((item) => ({
+        key: item.key,
+        label: item.label,
+        revenue: item.revenue,
+        orders: item.orders,
+      }))
+    );
+  } else {
+    console.error(
+      "❌ FINAL monthlyRevenue IS EMPTY."
+    );
+
+    console.error(
+      "Lifetime orders:",
+      allLifetimeOrders?.length || 0
+    );
+
+    console.error(
+      "baseData.monthlyRevenue:",
+      baseData?.monthlyRevenue?.length || 0
+    );
+
+    console.error(
+      "baseData.dailyRevenue:",
+      baseData?.dailyRevenue?.length || 0
+    );
+  }
+
+  console.groupEnd();
+
+  // ------------------------------------------------------------
+  // 6. FINANCIAL CALCULATIONS
+  // ------------------------------------------------------------
+
+  const grossRevenue = Number(
+    baseData?.totalRevenue || 0
+  );
+
+  const overheadExpenses = Number(
+    baseData?.totalExpenses || 0
+  );
+
+  const rejectionLoss = Number(
+    baseData?.totalRejectionCost || 0
+  );
+
+  const totalOrders = Number(
+    baseData?.totalOrders || 0
+  );
+
+  const netOperatingProfit =
+    grossRevenue -
+    overheadExpenses -
+    rejectionLoss;
+
+  const netProfitMargin =
+    grossRevenue > 0
+      ? (netOperatingProfit / grossRevenue) * 100
+      : 0;
+
+  const operatingExpenseRatio =
+    grossRevenue > 0
+      ? (overheadExpenses / grossRevenue) * 100
+      : 0;
+
+  const rejectionDragRatio =
+    grossRevenue > 0
+      ? (rejectionLoss / grossRevenue) * 100
+      : 0;
+
+  const aov =
+    totalOrders > 0
+      ? grossRevenue / totalOrders
+      : 0;
+
+  const netProfitPerPair =
+    totalOrders > 0
+      ? netOperatingProfit / totalOrders
+      : 0;
+
+  const overheadPerPair =
+    totalOrders > 0
+      ? overheadExpenses / totalOrders
+      : 0;
+
+  const servicesPerPair =
+    totalOrders > 0
+      ? Number(
+          baseData?.totalServicesRequestedCount || 0
+        ) / totalOrders
+      : 0;
+
+  const averageRejectionCost =
+    Number(baseData?.rejectedOrdersCount || 0) > 0
+      ? rejectionLoss /
+        Number(baseData.rejectedOrdersCount)
+      : 0;
+
+  // ------------------------------------------------------------
+  // 7. HEALTH INDICATORS
+  // ------------------------------------------------------------
+
+  let marginHealth = "neutral";
+
+  if (netProfitMargin >= 20) {
+    marginHealth = "strong";
+  } else if (netProfitMargin >= 10) {
+    marginHealth = "healthy";
+  } else if (netProfitMargin >= 0) {
+    marginHealth = "watch";
+  } else {
+    marginHealth = "critical";
+  }
+
+  let expenseHealth = "neutral";
+
+  if (operatingExpenseRatio <= 20) {
+    expenseHealth = "strong";
+  } else if (operatingExpenseRatio <= 35) {
+    expenseHealth = "healthy";
+  } else if (operatingExpenseRatio <= 50) {
+    expenseHealth = "watch";
+  } else {
+    expenseHealth = "critical";
+  }
+
+  let leakageHealth = "neutral";
+
+  if (rejectionDragRatio <= 2) {
+    leakageHealth = "strong";
+  } else if (rejectionDragRatio <= 5) {
+    leakageHealth = "healthy";
+  } else if (rejectionDragRatio <= 10) {
+    leakageHealth = "watch";
+  } else {
+    leakageHealth = "critical";
+  }
+
+  // ------------------------------------------------------------
+  // 8. MONTHLY TRENDS
+  // ------------------------------------------------------------
+
+  const monthlyTrends = Array.isArray(monthlyRevenue)
+    ? monthlyRevenue.map((current, index, array) => {
+        const previous =
+          index > 0 ? array[index - 1] : null;
+
+        const revenueChange =
+          previous && Number(previous.revenue) !== 0
+            ? ((Number(current.revenue) -
+                Number(previous.revenue)) /
+                Number(previous.revenue)) *
+              100
+            : null;
+
+        const ordersChange =
+          previous && Number(previous.orders) !== 0
+            ? ((Number(current.orders) -
+                Number(previous.orders)) /
+                Number(previous.orders)) *
+              100
+            : null;
+
+        return {
+          key: current.key,
+          label: current.label,
+          revenue: Number(current.revenue || 0),
+          orders: Number(current.orders || 0),
+          revenueChange,
+          ordersChange,
+        };
+      })
+    : [];
+
+  // ------------------------------------------------------------
+  // 9. STRATEGIC LEVERS
+  // ------------------------------------------------------------
+
+  const levers = [];
+
+  if (rejectionDragRatio > 5) {
+    levers.push({
+      key: "rejection",
+      title: "Reduce rejection leakage",
+      impact: "high",
+      metric: rejectionDragRatio,
+      description:
+        "Rejection-related losses are consuming a measurable portion of gross revenue.",
+    });
+  }
+
+  if (operatingExpenseRatio > 35) {
+    levers.push({
+      key: "expenses",
+      title: "Control operating expenses",
+      impact: "high",
+      metric: operatingExpenseRatio,
+      description:
+        "Operating expenses are taking a significant share of revenue.",
+    });
+  }
+
+  if (aov > 0 && servicesPerPair < 1.5) {
+    levers.push({
+      key: "services",
+      title: "Increase service attachment",
+      impact: "medium",
+      metric: servicesPerPair,
+      description:
+        "Additional services per order may provide an opportunity to increase revenue per pair.",
+    });
+  }
+
+  if (netProfitMargin < 10) {
+    levers.push({
+      key: "margin",
+      title: "Improve operating margin",
+      impact: "high",
+      metric: netProfitMargin,
+      description:
+        "Current operating profitability leaves limited room for cost or revenue shocks.",
+    });
+  }
+
+  if (levers.length === 0) {
+    levers.push({
+      key: "growth",
+      title: "Protect profitable growth",
+      impact: "medium",
+      metric: netProfitMargin,
+      description:
+        "Current indicators do not show a dominant financial leakage area.",
+    });
+  }
+
+  // ------------------------------------------------------------
+  // 10. FINAL RESULT
+  // ------------------------------------------------------------
+
+  const result = {
     ...baseData,
+
     grossRevenue,
     overheadExpenses,
     rejectionLoss,
+
     netOperatingProfit,
     netProfitMargin,
     operatingExpenseRatio,
     rejectionDragRatio,
+
     aov,
     netProfitPerPair,
+    overheadPerPair,
     servicesPerPair,
     averageRejectionCost,
+
     marginHealth,
     expenseHealth,
     leakageHealth,
+
+    dailyRevenue: Array.isArray(baseData?.dailyRevenue)
+      ? baseData.dailyRevenue
+      : [],
+
+    monthlyRevenue: Array.isArray(monthlyRevenue)
+      ? monthlyRevenue
+      : [],
+
     monthlyTrends,
+
     levers,
+
+    selectedDays: baseData?.selectedDays || 0,
   };
+
+  // ------------------------------------------------------------
+  // 11. FINAL RETURN DIAGNOSTICS
+  // ------------------------------------------------------------
+
+  console.group(
+    "%c📊 FINANCIAL INTELLIGENCE FINAL RESULT",
+    "color:#fff;background:#1d4ed8;font-size:15px;font-weight:bold;padding:6px 10px;"
+  );
+
+  console.log(
+    "grossRevenue:",
+    result.grossRevenue
+  );
+
+  console.log(
+    "netOperatingProfit:",
+    result.netOperatingProfit
+  );
+
+  console.log(
+    "netProfitMargin:",
+    result.netProfitMargin
+  );
+
+  console.log(
+    "dailyRevenue count:",
+    result.dailyRevenue.length
+  );
+
+  console.log(
+    "monthlyRevenue count:",
+    result.monthlyRevenue.length
+  );
+
+  console.log(
+    "monthlyTrends count:",
+    result.monthlyTrends.length
+  );
+
+  console.log(
+    "monthlyRevenue:",
+    result.monthlyRevenue
+  );
+
+  console.groupEnd();
+
+  return result;
 }
 
 /* =========================================================

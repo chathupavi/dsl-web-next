@@ -33,3 +33,27 @@ export async function POST(request) {
     );
   }
 }
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Action document ID is required." },
+        { status: 400 }
+      );
+    }
+
+    await adminDb.collection("strategic_actions").doc(id).delete();
+
+    return NextResponse.json({ success: true, id });
+  } catch (error) {
+    console.error("Failed to delete strategic action:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to delete action." },
+      { status: 500 }
+    );
+  }
+}

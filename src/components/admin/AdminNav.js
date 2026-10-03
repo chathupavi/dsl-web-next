@@ -18,12 +18,6 @@ const links = [
     icon: OrdersIcon,
   },
   {
-    href: "/admin/financial",
-    label: "Financial Overview",
-    description: "Growth & margin analytics",
-    icon: GrowthIcon,
-  },
-  {
     href: "/admin/expenses",
     label: "Expenses",
     description: "Cost management",
@@ -40,6 +34,12 @@ const links = [
     label: "Feedback",
     description: "Customer experience",
     icon: FeedbackIcon,
+  },
+    {
+    href: "/admin/financial",
+    label: "Financial Overview",
+    description: "Growth & margin analytics",
+    icon: GrowthIcon,
   },
   {
     href: "/admin/users",
