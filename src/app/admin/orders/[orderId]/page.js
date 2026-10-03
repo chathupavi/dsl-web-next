@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import StatusBadge from "@/components/admin/StatusBadge";
 import PriceAdjuster from "@/components/admin/PriceAdjuster";
+import OrderImageGallery from "@/components/admin/OrderImageGallery";
 import {
   getOrder,
   money,
@@ -10,6 +11,38 @@ import {
 } from "@/lib/admin-data";
 
 export const dynamic = "force-dynamic";
+
+/* =========================================================
+   ICONS & MICRO-ASSETS
+========================================================= */
+
+function ArrowLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+/* =========================================================
+   HELPERS & TAGS
+========================================================= */
 
 function activeConditions(condition = {}) {
   return Object.entries(condition)
@@ -20,18 +53,31 @@ function activeConditions(condition = {}) {
 function ConditionTags({ data }) {
   const values = activeConditions(data);
 
-  if (!values.length) return <span className="muted">—</span>;
+  if (!values.length) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-[#557C2D]">
+        <CheckCircleIcon /> Good
+      </span>
+    );
+  }
 
   return (
-    <div className="tag-list">
+    <div className="flex flex-wrap gap-1">
       {values.map((value) => (
-        <span className="tag" key={value}>
+        <span
+          key={value}
+          className="rounded-[6px] border border-[#F1E7C8] bg-[#FFFDF7] px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.04em] text-[#966410]"
+        >
           {value}
         </span>
       ))}
     </div>
   );
 }
+
+/* =========================================================
+   PAGE COMPONENT
+========================================================= */
 
 export default async function OrderDetailPage({ params }) {
   const { orderId } = await params;
@@ -40,156 +86,225 @@ export default async function OrderDetailPage({ params }) {
   if (!order) notFound();
 
   const currentRevenue = effectiveRevenue(order);
-
   const left = order.leftShoe || {};
   const right = order.rightShoe || {};
 
   return (
-    <>
-      <div className="topbar">
-        <Link className="btn btn-soft" href="/admin/orders">
-          ← Back to orders
+    <div className="space-y-[18px]">
+      {/* =====================================================
+          TOP NAVIGATION BAR
+      ===================================================== */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/admin/orders"
+          className="inline-flex items-center gap-2 rounded-xl border border-[#E5ECEF] bg-white px-3.5 py-2 text-[10px] font-extrabold text-[#6D7E8A] shadow-[0_2px_8px_rgba(28,59,87,0.04)] transition hover:border-[#0094B6]/30 hover:bg-[#F2F8FA] hover:text-[#0094B6]"
+        >
+          <ArrowLeftIcon />
+          Back to Orders
         </Link>
+
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#7A8C96]">
+          Order Workspace
+        </span>
       </div>
 
-      <section className="order-hero">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+      {/* =====================================================
+          EXECUTIVE HERO COMMAND BANNER
+      ===================================================== */}
+      <section className="relative overflow-hidden rounded-[22px] border border-[#E5ECEF] bg-gradient-to-br from-white via-white to-[#FAFDFD] p-6 shadow-[0_14px_40px_rgba(28,59,87,0.08)] after:absolute after:-right-12 after:-top-12 after:h-[140px] after:w-[140px] after:rounded-full after:bg-[#0094B6]/[0.05]">
+        <div className="relative z-10 flex items-start justify-between gap-6 max-lg:flex-col max-lg:items-stretch">
           <div>
-            <p className="eyebrow">Order workspace</p>
-            <h1 className="page-title">{order.orderId || order.id}</h1>
-            <p className="page-subtitle">
-              {order.customerName || "Customer"} · {order.mobileNumber || "No mobile"}
-            </p>
+            <div className="mb-1.5 flex items-center gap-2.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#0094B6]">
+                Intake Profile
+              </span>
+              <span className="rounded-full bg-[#EAF7FA] px-2.5 py-0.5 text-[9px] font-extrabold text-[#087C99]">
+                Tag #{order.tagNo || "N/A"}
+              </span>
+            </div>
+
+            <h1 className="text-[clamp(28px,3vw,40px)] font-extrabold leading-none tracking-[-0.04em] text-[#1C3B57]">
+              {order.orderId || order.id}
+            </h1>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px] text-[#6D7E8A]">
+              <strong className="text-[#1C3B57]">{order.customerName || "Customer"}</strong>
+              {order.mobileNumber && (
+                <>
+                  <span>•</span>
+                  <a
+                    href={`tel:${order.mobileNumber}`}
+                    className="inline-flex items-center gap-1 font-mono text-[#0094B6] hover:underline"
+                  >
+                    <PhoneIcon />
+                    {order.mobileNumber}
+                  </a>
+                </>
+              )}
+              <span>•</span>
+              <span>Intake Date: {formatDate(order.timestamp || order.date, true)}</span>
+            </div>
           </div>
-          <StatusBadge status={order.status} />
+
+          <div className="flex flex-col items-end gap-2 max-lg:items-start">
+            <StatusBadge status={order.status} />
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#7A8C96]">
+              Location: {order.orderLocation || "Standard Dispatch"}
+            </span>
+          </div>
         </div>
 
-        <div className="order-meta-row">
-          <span className="hero-chip">Tag {order.tagNo || "—"}</span>
-          <span className="hero-chip">{order.brand || "Unknown brand"}</span>
-          <span className="hero-chip">{order.shoeType || "Shoe"}</span>
-          <span className="hero-chip">Size {order.size || "—"}</span>
-          <span className="hero-chip">{order.orderType || "—"} order</span>
-          <span className="hero-chip">{order.orderLocation || "—"}</span>
+        {/* Garment / Shoe Meta Chips */}
+        <div className="relative z-10 mt-6 flex flex-wrap gap-2 border-t border-[#E5ECEF]/80 pt-4">
+          <div className="rounded-xl border border-[#E5ECEF] bg-[#FAFDFD] px-3 py-1.5 text-[10px] font-extrabold text-[#1C3B57]">
+            <span className="text-[#7A8C96]">Brand:</span> {order.brand || "—"}
+          </div>
+          <div className="rounded-xl border border-[#E5ECEF] bg-[#FAFDFD] px-3 py-1.5 text-[10px] font-extrabold text-[#1C3B57]">
+            <span className="text-[#7A8C96]">Type:</span> {order.shoeType || "Shoe"}
+          </div>
+          <div className="rounded-xl border border-[#E5ECEF] bg-[#FAFDFD] px-3 py-1.5 text-[10px] font-extrabold text-[#1C3B57]">
+            <span className="text-[#7A8C96]">Size:</span> {order.size || "—"}
+          </div>
+          <div className="rounded-xl border border-[#E5ECEF] bg-[#FAFDFD] px-3 py-1.5 text-[10px] font-extrabold text-[#1C3B57]">
+            <span className="text-[#7A8C96]">Color:</span> {order.color || "—"}
+          </div>
+          <div className="rounded-xl border border-[#E5ECEF] bg-[#FAFDFD] px-3 py-1.5 text-[10px] font-extrabold text-[#1C3B57]">
+            <span className="text-[#7A8C96]">Class:</span> {order.orderType || "Regular"}
+          </div>
         </div>
       </section>
 
-      <section className="grid-2 section-gap">
-        <article className="panel">
-          <div className="panel-head">
+      {/* =====================================================
+          GRID: PHOTOS (WITH INTERACTIVE SLIDESHOW) & SPECS
+      ===================================================== */}
+      <section className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+        {/* Photos Inspection with Slideshow Modal */}
+        <article className="rounded-[22px] border border-[#E5ECEF] bg-white/95 p-5 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+          <div className="mb-4 flex items-center justify-between border-b border-[#E5ECEF] pb-3">
             <div>
-              <h2 className="panel-title">Order images</h2>
-              <p className="panel-subtitle">
-                Customer item reference and condition photos
-              </p>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+                Physical Evidence
+              </div>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+                Order Images
+              </h2>
+            </div>
+            <span className="rounded-full bg-[#F2F6F7] px-2.5 py-1 text-[9px] font-extrabold text-[#647985]">
+              {(order.imageUrls || []).length} photos
+            </span>
+          </div>
+
+          <OrderImageGallery
+            images={order.imageUrls || []}
+            orderId={order.orderId || order.id}
+          />
+        </article>
+
+        {/* Detailed Information & Special Instructions */}
+        <article className="rounded-[22px] border border-[#E5ECEF] bg-white/95 p-5 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+          <div className="mb-4 border-b border-[#E5ECEF] pb-3">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+              Customer Data
+            </div>
+            <h2 className="text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+              Order Specifications
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-[11px]">
+            <div className="rounded-[14px] border border-[#E5ECEF] bg-[#FAFDFD] p-3">
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">Customer</span>
+              <p className="mt-0.5 font-bold text-[#1C3B57]">{order.customerName || "—"}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#E5ECEF] bg-[#FAFDFD] p-3">
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">Mobile</span>
+              <p className="mt-0.5 font-mono font-bold text-[#1C3B57]">{order.mobileNumber || "—"}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#E5ECEF] bg-[#FAFDFD] p-3">
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">Shoe Model</span>
+              <p className="mt-0.5 font-bold text-[#1C3B57]">{order.shoeType || "—"}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#E5ECEF] bg-[#FAFDFD] p-3">
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">Color Hue</span>
+              <p className="mt-0.5 font-bold text-[#1C3B57]">{order.color || "—"}</p>
             </div>
           </div>
 
-          {(order.imageUrls || []).length ? (
-            <div className="image-grid">
-              {(order.imageUrls || []).map((url, index) => (
-                <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer">
-                  <img
-                    className="order-image"
-                    src={url}
-                    alt={`${order.orderId || order.id} shoe ${index + 1}`}
-                  />
-                </a>
-              ))}
+          {order.notes && (
+            <div className="mt-3.5 rounded-[14px] border border-[#F1E7C8] bg-gradient-to-br from-[#FFFDF7] to-[#FBF8EE] p-3.5">
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#966410]">
+                Customer Notes / Special Directives
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#1C3B57]">
+                {order.notes}
+              </p>
             </div>
-          ) : (
-            <div className="empty">No images available for this order.</div>
           )}
         </article>
-
-        <article className="panel">
-          <div className="panel-head">
-            <div>
-              <h2 className="panel-title">Order information</h2>
-              <p className="panel-subtitle">Customer and product details</p>
-            </div>
-          </div>
-
-          <div className="info-grid">
-            <div className="info-item">
-              <div className="info-label">Customer</div>
-              <div className="info-value">{order.customerName || "—"}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Mobile</div>
-              <div className="info-value">{order.mobileNumber || "—"}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Brand</div>
-              <div className="info-value">{order.brand || "—"}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Color</div>
-              <div className="info-value">{order.color || "—"}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Shoe type</div>
-              <div className="info-value">{order.shoeType || "—"}</div>
-            </div>
-            <div className="info-item">
-              <div className="info-label">Received</div>
-              <div className="info-value">
-                {formatDate(order.timestamp || order.date, true)}
-              </div>
-            </div>
-          </div>
-
-          {order.notes ? (
-            <div className="adjusted-price">
-              <div className="info-label">Notes</div>
-              <div className="info-value">{order.notes}</div>
-            </div>
-          ) : null}
-        </article>
       </section>
 
-      <section className="grid-2 section-gap">
-        <article className="panel">
-          <div className="panel-head">
-            <div>
-              <h2 className="panel-title">Shoe condition</h2>
-              <p className="panel-subtitle">
-                Intake inspection — left and right shoe
-              </p>
+      {/* =====================================================
+          GRID: CONDITION MATRIX & FINANCIAL SUMMARY
+      ===================================================== */}
+      <section className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+        {/* Left vs Right Shoe Condition Assessment */}
+        <article className="rounded-[22px] border border-[#E5ECEF] bg-white/95 p-5 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+          <div className="mb-4 border-b border-[#E5ECEF] pb-3">
+            <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+              Condition Matrix
             </div>
+            <h2 className="text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+              Intake Inspection Breakdown
+            </h2>
           </div>
 
-          <div className="condition-grid">
-            <div className="condition-head">Area</div>
-            <div className="condition-head">Left</div>
-            <div className="condition-head">Right</div>
-
-            <div className="strong">Upper</div>
-            <div><ConditionTags data={left.upperCondition} /></div>
-            <div><ConditionTags data={right.upperCondition} /></div>
-
-            <div className="strong">Sole</div>
-            <div><ConditionTags data={left.soleCondition} /></div>
-            <div><ConditionTags data={right.soleCondition} /></div>
-
-            <div className="strong">Insole</div>
-            <div><ConditionTags data={left.insoleCondition} /></div>
-            <div><ConditionTags data={right.insoleCondition} /></div>
-
-            <div className="strong">Laces</div>
-            <div><ConditionTags data={left.lacesCondition} /></div>
-            <div><ConditionTags data={right.lacesCondition} /></div>
+          <div className="overflow-hidden rounded-[16px] border border-[#E5ECEF]">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-[#FAFDFD] text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">
+                <tr>
+                  <th className="border-b border-[#E5ECEF] px-4 py-2.5">Region</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-2.5">Left Shoe</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-2.5">Right Shoe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5ECEF]">
+                <tr>
+                  <td className="px-4 py-3 font-bold text-[#1C3B57]">Upper</td>
+                  <td className="px-4 py-3"><ConditionTags data={left.upperCondition} /></td>
+                  <td className="px-4 py-3"><ConditionTags data={right.upperCondition} /></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-[#1C3B57]">Sole</td>
+                  <td className="px-4 py-3"><ConditionTags data={left.soleCondition} /></td>
+                  <td className="px-4 py-3"><ConditionTags data={right.soleCondition} /></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-[#1C3B57]">Insole</td>
+                  <td className="px-4 py-3"><ConditionTags data={left.insoleCondition} /></td>
+                  <td className="px-4 py-3"><ConditionTags data={right.insoleCondition} /></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-[#1C3B57]">Laces</td>
+                  <td className="px-4 py-3"><ConditionTags data={left.lacesCondition} /></td>
+                  <td className="px-4 py-3"><ConditionTags data={right.lacesCondition} /></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </article>
 
-        <article className="panel">
-          <div className="panel-head">
+        {/* Financial & Revenue Reconciliation */}
+        <article className="rounded-[22px] border border-[#E5ECEF] bg-white/95 p-5 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+          <div className="mb-4 flex items-center justify-between border-b border-[#E5ECEF] pb-3">
             <div>
-              <h2 className="panel-title">Pricing</h2>
-              <p className="panel-subtitle">
-                Original commercial value remains preserved
-              </p>
+              <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+                Billing Ledger
+              </div>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+                Revenue Breakdown
+              </h2>
             </div>
+
             <PriceAdjuster
               orderId={order.id}
               currentAmount={currentRevenue}
@@ -197,80 +312,103 @@ export default async function OrderDetailPage({ params }) {
             />
           </div>
 
-          <div className="price-stack">
-            <div className="price-line">
-              <span className="muted">Original total</span>
-              <strong>{money(order.priceOriginalTotal)}</strong>
+          <div className="space-y-2.5 text-[11px]">
+            <div className="flex items-center justify-between py-1 text-[#6D7E8A]">
+              <span>Original Standard Subtotal</span>
+              <strong className="font-mono text-[#1C3B57]">{money(order.priceOriginalTotal)}</strong>
             </div>
-            <div className="price-line">
-              <span className="muted">Discount</span>
-              <strong>- {money(order.priceDiscountAmount)}</strong>
+
+            <div className="flex items-center justify-between py-1 text-[#6D7E8A]">
+              <span>Applied Campaign Discount</span>
+              <span className="font-mono font-bold text-[#A74A4A]">- {money(order.priceDiscountAmount)}</span>
             </div>
-            <div className="price-line">
-              <span className="muted">Original final total</span>
-              <strong>{money(order.priceFinalTotal)}</strong>
+
+            <div className="flex items-center justify-between py-1 text-[#6D7E8A]">
+              <span>Original Computed Final Total</span>
+              <strong className="font-mono text-[#1C3B57]">{money(order.priceFinalTotal)}</strong>
             </div>
-            <div className="price-line total">
-              <span>Revenue amount</span>
-              <span>{money(currentRevenue)}</span>
+
+            <div className="mt-2 flex items-center justify-between rounded-xl bg-gradient-to-r from-[#17364D] to-[#1C3B57] p-3.5 text-white">
+              <div>
+                <span className="block text-[8px] font-extrabold uppercase tracking-[0.1em] text-white/60">
+                  Effective Net Outflow / Revenue
+                </span>
+                <span className="text-[13px] font-extrabold">Final Billed Total</span>
+              </div>
+              <span className="font-mono text-[20px] font-extrabold tracking-[-0.03em] text-[#38bdf8]">
+                {money(currentRevenue)}
+              </span>
             </div>
           </div>
 
-          {order.priceAdjustedTotal !== undefined &&
-          order.priceAdjustedTotal !== null ? (
-            <div className="adjusted-price">
-              <div className="info-label">Adjusted by</div>
-              <div className="info-value">
-                {order.priceAdjustedBy || "Administrator"}
+          {order.priceAdjustedTotal !== undefined && order.priceAdjustedTotal !== null && (
+            <div className="mt-3.5 rounded-[14px] border border-[#E5ECEF] bg-[#FAFDFD] p-3 text-[10px]">
+              <div className="flex items-center justify-between font-bold text-[#1C3B57]">
+                <span>Adjusted By: {order.priceAdjustedBy || "Administrator"}</span>
+                <span className="font-mono text-[#6D7E8A]">{formatDate(order.priceAdjustedAt, true)}</span>
               </div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                {order.priceAdjustmentReason || "No reason recorded"} ·{" "}
-                {formatDate(order.priceAdjustedAt, true)}
-              </div>
+              <p className="mt-1 text-[#6D7E8A]">
+                Reason: {order.priceAdjustmentReason || "Manual fee concession"}
+              </p>
             </div>
-          ) : null}
+          )}
         </article>
       </section>
 
-      <section className="panel section-gap">
-        <div className="panel-head">
-          <div>
-            <h2 className="panel-title">Requested services</h2>
-            <p className="panel-subtitle">
-              Service price, discount, worker and progress
-            </p>
+      {/* =====================================================
+          REQUESTED SERVICES MATRIX
+      ===================================================== */}
+      <section className="overflow-hidden rounded-[22px] border border-[#E5ECEF] bg-white/95 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+        <div className="border-b border-[#E5ECEF] px-5 py-4">
+          <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+            Service Execution
           </div>
+          <h2 className="mt-0.5 text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+            Requested Treatments & Assignments
+          </h2>
         </div>
 
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left text-[11px]">
+            <thead className="bg-[#FAFDFD] text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">
               <tr>
-                <th>Category</th>
-                <th>Service</th>
-                <th>Base price</th>
-                <th>Discount</th>
-                <th>Final</th>
-                <th>Worker</th>
-                <th>Status</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Category</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Service Name</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Base Price</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Promo</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Final (LKR)</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3">Assigned Technician</th>
+                <th className="border-b border-[#E5ECEF] px-4 py-3 text-right">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#E5ECEF]">
               {(order.servicesRequested || []).map((service, index) => (
-                <tr key={`${service.name}-${index}`}>
-                  <td>{service.category || "—"}</td>
-                  <td className="strong">{service.name || "—"}</td>
-                  <td>{money(service.price)}</td>
-                  <td>{Number(service.discount || 0)}%</td>
-                  <td className="strong">
-                    {money(service.priceAfterDiscount ?? service.price)}
-                  </td>
-                  <td>
-                    {service.worker || (
-                      <span className="muted">Not assigned</span>
+                <tr key={`${service.name}-${index}`} className="transition hover:bg-[#FAFCFC]">
+                  <td className="px-4 py-3 font-semibold text-[#6D7E8A]">{service.category || "General"}</td>
+                  <td className="px-4 py-3 font-bold text-[#1C3B57]">{service.name || "—"}</td>
+                  <td className="px-4 py-3 font-mono text-[#6D7E8A]">{money(service.price)}</td>
+                  <td className="px-4 py-3">
+                    {Number(service.discount || 0) > 0 ? (
+                      <span className="rounded-full bg-[#EFF8E6] px-2 py-0.5 text-[9px] font-extrabold text-[#527D23]">
+                        {Number(service.discount)}% OFF
+                      </span>
+                    ) : (
+                      <span className="text-[#94A2AA]">None</span>
                     )}
                   </td>
-                  <td>
+                  <td className="px-4 py-3 font-mono font-bold text-[#1C3B57]">
+                    {money(service.priceAfterDiscount ?? service.price)}
+                  </td>
+                  <td className="px-4 py-3">
+                    {service.worker ? (
+                      <span className="rounded-lg border border-[#E5ECEF] bg-[#FAFDFD] px-2 py-1 font-semibold text-[#1C3B57]">
+                        {service.worker}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[#94A2AA]">Unassigned</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
                     <StatusBadge status={service.status || "Pending"} />
                   </td>
                 </tr>
@@ -280,45 +418,50 @@ export default async function OrderDetailPage({ params }) {
         </div>
       </section>
 
-      <section className="panel section-gap">
-        <div className="panel-head">
-          <div>
-            <h2 className="panel-title">Price history</h2>
-            <p className="panel-subtitle">
-              Audit trail for every revenue price adjustment
-            </p>
+      {/* =====================================================
+          PRICE HISTORY AUDIT TRAIL
+      ===================================================== */}
+      <section className="overflow-hidden rounded-[22px] border border-[#E5ECEF] bg-white/95 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
+        <div className="border-b border-[#E5ECEF] px-5 py-4">
+          <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
+            Audit Trail
           </div>
+          <h2 className="mt-0.5 text-[17px] font-extrabold tracking-[-0.025em] text-[#1C3B57]">
+            Price Adjustment History
+          </h2>
         </div>
 
         {order.priceHistory?.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[650px] text-left text-[11px]">
+              <thead className="bg-[#FAFDFD] text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">
                 <tr>
-                  <th>Date</th>
-                  <th>Previous</th>
-                  <th>New</th>
-                  <th>Changed by</th>
-                  <th>Reason</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-3">Date</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-3">Previous Total</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-3">Updated Total</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-3">Authorized By</th>
+                  <th className="border-b border-[#E5ECEF] px-4 py-3">Recorded Justification</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-[#E5ECEF]">
                 {order.priceHistory.map((item) => (
-                  <tr key={item.id}>
-                    <td>{formatDate(item.changedAt, true)}</td>
-                    <td>{money(item.previousAmount)}</td>
-                    <td className="strong">{money(item.newAmount)}</td>
-                    <td>{item.changedBy || "Admin"}</td>
-                    <td>{item.reason || "—"}</td>
+                  <tr key={item.id} className="transition hover:bg-[#FAFCFC]">
+                    <td className="px-4 py-3 font-mono text-[#6D7E8A]">{formatDate(item.changedAt, true)}</td>
+                    <td className="px-4 py-3 font-mono text-[#94A2AA] line-through">{money(item.previousAmount)}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-[#1C3B57]">{money(item.newAmount)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#1C3B57]">{item.changedBy || "Administrator"}</td>
+                    <td className="px-4 py-3 text-[#6D7E8A]">{item.reason || "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="empty">No price adjustments have been made.</div>
+          <div className="py-8 text-center text-[11px] text-[#6D7E8A]">
+            No historical price overrides or manual adjustments recorded on this order.
+          </div>
         )}
       </section>
-    </>
+    </div>
   );
 }

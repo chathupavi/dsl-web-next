@@ -1,2440 +1,1283 @@
 import "server-only";
 
+import crypto from "node:crypto";
 import {
   AggregateField,
   FieldPath,
 } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
-import {
-  unstable_cache,
-} from "next/cache";
+const COLOMBO_OFFSET = "+05:30";
+const COLOMBO_TIMEZONE = "Asia/Colombo";
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100; // For table pagination only
+const MAX_DASHBOARD_SCAN = 3500; // Allows up to 3,500 orders for multi-month scans
+const MAX_DATE_RANGE_DAYS = 370; // Supports up to ~12 months without clipping
 
-import {
-  adminDb,
-} from "@/lib/firebase-admin";
+// HMAC signing secret for pagination cursors
+const CURSOR_SECRET =
+  process.env.CURSOR_SIGNING_SECRET ||
+  process.env.NEXTAUTH_SECRET ||
+  crypto.randomBytes(32).toString("hex");
 
+/* =========================================================
+   SECURITY & AUTHORIZATION GUARDS
+========================================================= */
 
-const COLOMBO_OFFSET =
-  "+05:30";
+export function assertAuthorized(
+  session,
+  allowedRoles = ["admin", "manager"]
+) {
+  if (!session || !session.uid || !allowedRoles.includes(session.role)) {
+    throw new Error("UNAUTHORIZED_ACCESS: Insufficient permissions.");
+  }
+}
 
-const COLOMBO_TIMEZONE =
-  "Asia/Colombo";
+function isValidDocId(id) {
+  return typeof id === "string" && /^[a-zA-Z0-9_.-]{1,128}$/.test(id);
+}
 
-const DEFAULT_PAGE_SIZE =
-  20;
+function isValidDateString(dateStr) {
+  return typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
 
-const MAX_PAGE_SIZE =
-  100;
+/* =========================================================
+   SECURE CURSOR ENCRYPTION / SIGNING
+========================================================= */
 
+function signData(serializedData) {
+  return crypto
+    .createHmac("sha256", CURSOR_SECRET)
+    .update(serializedData)
+    .digest("base64url");
+}
+
+function encodeCursor(value) {
+  if (!value) return null;
+  const json = JSON.stringify(value);
+  const payload = Buffer.from(json).toString("base64url");
+  const signature = signData(payload);
+  return `${payload}.${signature}`;
+}
+
+function decodeCursor(cursor) {
+  const fallback = { after: null, history: [] };
+  if (!cursor || typeof cursor !== "string") return fallback;
+
+  const parts = cursor.split(".");
+  if (parts.length !== 2) return fallback;
+
+  const [payload, signature] = parts;
+  const expectedSignature = signData(payload);
+
+  const sigBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+  if (
+    sigBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+  ) {
+    return fallback;
+  }
+
+  try {
+    const raw = Buffer.from(payload, "base64url").toString("utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      after:
+        parsed?.after && isValidDocId(parsed.after.id) && parsed.after.timestamp
+          ? parsed.after
+          : null,
+      history: Array.isArray(parsed?.history) ? parsed.history : [],
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 /* =========================================================
    DATE HELPERS
 ========================================================= */
 
-function toDate(
-  value
-) {
-  if (!value) {
-    return null;
-  }
-
-
-  if (
-    typeof value?.toDate ===
-    "function"
-  ) {
-    return value.toDate();
-  }
-
-
-  if (
-    value instanceof Date
-  ) {
-    return value;
-  }
-
-
-  const date =
-    new Date(value);
-
-
-  return Number.isNaN(
-    date.getTime()
-  )
-    ? null
-    : date;
+function toDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-
-/* =========================================================
-   DATE -> YYYY-MM-DD
-========================================================= */
-
-function toDateInputValue(
-  value
-) {
-  const date =
-    toDate(value);
-
-
-  if (!date) {
-    return "";
-  }
-
-
-  return new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone:
-        COLOMBO_TIMEZONE,
-
-      year:
-        "numeric",
-
-      month:
-        "2-digit",
-
-      day:
-        "2-digit",
-    }
-  ).format(
-    date
-  );
+function toDateInputValue(value) {
+  const date = toDate(value);
+  if (!date) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: COLOMBO_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
-
-
-/* =========================================================
-   TODAY
-========================================================= */
 
 function getTodayDateInput() {
-  return new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone:
-        COLOMBO_TIMEZONE,
-
-      year:
-        "numeric",
-
-      month:
-        "2-digit",
-
-      day:
-        "2-digit",
-    }
-  ).format(
-    new Date()
-  );
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: COLOMBO_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
-
-/* =========================================================
-   CURRENT MONTH START
-========================================================= */
-
 function getCurrentMonthStart() {
-  const today =
-    getTodayDateInput();
-
-
-  const [
-    year,
-    month,
-  ] =
-    today.split("-");
-
-
+  const today = getTodayDateInput();
+  const [year, month] = today.split("-");
   return `${year}-${month}-01`;
 }
 
-
-/* =========================================================
-   DAY BOUNDS
-========================================================= */
-
-function startOfSriLankaDay(
-  value
-) {
-  return new Date(
-    `${value}T00:00:00.000${COLOMBO_OFFSET}`
-  );
+function startOfSriLankaDay(value) {
+  return new Date(`${value}T00:00:00.000${COLOMBO_OFFSET}`);
 }
 
-
-function endOfSriLankaDay(
-  value
-) {
-  return new Date(
-    `${value}T23:59:59.999${COLOMBO_OFFSET}`
-  );
+function endOfSriLankaDay(value) {
+  return new Date(`${value}T23:59:59.999${COLOMBO_OFFSET}`);
 }
 
-
-/* =========================================================
-   DAYS INCLUSIVE
-========================================================= */
-
-function daysInclusive(
-  from,
-  to
-) {
-  const start =
-    startOfSriLankaDay(
-      from
-    );
-
-
-  const end =
-    startOfSriLankaDay(
-      to
-    );
-
-
-  const difference =
-    end.getTime() -
-    start.getTime();
-
-
-  return Math.max(
-    1,
-
-    Math.floor(
-      difference /
-        86400000
-    ) + 1
-  );
+function daysInclusive(from, to) {
+  const start = startOfSriLankaDay(from);
+  const end = startOfSriLankaDay(to);
+  const difference = end.getTime() - start.getTime();
+  return Math.max(1, Math.floor(difference / 86400000) + 1);
 }
 
-
-/* =========================================================
-   SAFE PAGE SIZE
-========================================================= */
-
-function normalizePageSize(
-  pageSize
-) {
-  return Math.min(
-    MAX_PAGE_SIZE,
-
-    Math.max(
-      1,
-
-      Number(
-        pageSize
-      ) ||
-        DEFAULT_PAGE_SIZE
-    )
-  );
+function normalizePageSize(pageSize) {
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, Number(pageSize) || DEFAULT_PAGE_SIZE));
 }
 
+function normalizeScanLimit(limit) {
+  return Math.min(MAX_DASHBOARD_SCAN, Math.max(1, Number(limit) || MAX_DASHBOARD_SCAN));
+}
 
 /* =========================================================
-   FORMATTERS
+   FORMATTERS & SERIALIZATION
 ========================================================= */
 
-export function formatDate(
-  value,
-  withTime = false
-) {
-  const date =
-    toDate(value);
-
-
+export function formatDate(value, withTime = false) {
+  const date = toDate(value);
   if (!date) {
-    if (
-      typeof value ===
-      "string"
-    ) {
-      return value;
-    }
-
-    return "—";
+    return typeof value === "string" ? value : "—";
   }
 
-
-  return new Intl.DateTimeFormat(
-    "en-LK",
-    {
-      timeZone:
-        COLOMBO_TIMEZONE,
-
-      day:
-        "2-digit",
-
-      month:
-        "short",
-
-      year:
-        "numeric",
-
-      ...(withTime
-        ? {
-            hour:
-              "2-digit",
-
-            minute:
-              "2-digit",
-          }
-        : {}),
-    }
-  ).format(
-    date
-  );
+  return new Intl.DateTimeFormat("en-LK", {
+    timeZone: COLOMBO_TIMEZONE,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    ...(withTime
+      ? {
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      : {}),
+  }).format(date);
 }
 
-
-export function money(
-  value
-) {
-  const amount =
-    Number(
-      value || 0
-    );
-
-
-  return new Intl.NumberFormat(
-    "en-LK",
-    {
-      style:
-        "currency",
-
-      currency:
-        "LKR",
-
-      maximumFractionDigits:
-        0,
-    }
-  ).format(
-    amount
-  );
+export function money(value) {
+  const amount = Number(value) || 0;
+  return new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
-
-/* =========================================================
-   EFFECTIVE REVENUE
-========================================================= */
-
-export function effectiveRevenue(
-  order = {}
-) {
-  if (
-    order.priceAdjustedTotal !==
-      null &&
-    order.priceAdjustedTotal !==
-      undefined &&
-    order.priceAdjustedTotal !==
-      ""
-  ) {
-    const adjusted =
-      Number(
-        order.priceAdjustedTotal
-      );
-
-
-    if (
-      Number.isFinite(
-        adjusted
-      )
-    ) {
-      return adjusted;
-    }
+export function effectiveRevenue(order = {}) {
+  const status = String(order.status || "").toLowerCase();
+  if (status === "rejected") {
+    return 0;
   }
 
+  if (
+    order.priceAdjustedTotal !== null &&
+    order.priceAdjustedTotal !== undefined &&
+    order.priceAdjustedTotal !== ""
+  ) {
+    const adjusted = Number(order.priceAdjustedTotal);
+    if (Number.isFinite(adjusted)) return adjusted;
+  }
 
-  const original =
-    Number(
-      order.priceFinalTotal ||
-        0
-    );
-
-
-  return Number.isFinite(
-    original
-  )
-    ? original
-    : 0;
+  const original = Number(order.priceFinalTotal || 0);
+  return Number.isFinite(original) ? original : 0;
 }
 
-
-/* =========================================================
-   SERIALIZATION
-========================================================= */
-
-function plain(
-  data
-) {
-  if (
-    data === null ||
-    data === undefined
-  ) {
-    return data;
-  }
-
-
-  if (
-    typeof data !==
-    "object"
-  ) {
-    return data;
-  }
-
-
-  if (
-    typeof data?.toDate ===
-    "function"
-  ) {
-    return data
-      .toDate()
-      .toISOString();
-  }
-
-
-  if (
-    data instanceof Date
-  ) {
-    return data.toISOString();
-  }
-
-
-  if (
-    Array.isArray(
-      data
-    )
-  ) {
-    return data.map(
-      plain
-    );
-  }
-
+function plain(data) {
+  if (data === null || data === undefined) return data;
+  if (typeof data !== "object") return data;
+  if (typeof data?.toDate === "function") return data.toDate().toISOString();
+  if (data instanceof Date) return data.toISOString();
+  if (Array.isArray(data)) return data.map(plain);
 
   const result = {};
-
-
-  for (
-    const [
-      key,
-      value,
-    ] of Object.entries(
-      data
-    )
-  ) {
-    result[key] =
-      plain(
-        value
-      );
+  for (const [key, value] of Object.entries(data)) {
+    result[key] = plain(value);
   }
-
-
   return result;
 }
 
-
 /* =========================================================
-   PAGINATION CURSORS
-
-   Cursor stores:
-   - current startAfter location
-   - history of previous cursors
-
-   This gives NEXT + PREVIOUS without Firestore offset().
+   MONTHLY SERVICE TREND GENERATOR
 ========================================================= */
 
-function encodeCursor(
-  value
-) {
-  if (!value) {
-    return null;
-  }
+function createMonthlyServiceTrends(orders) {
+  const trendsByMonth = new Map();
+  const allServiceNames = new Set();
 
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
+    if (String(order.status || "").toLowerCase() === "rejected") continue;
 
-  return Buffer
-    .from(
-      JSON.stringify(
-        value
-      )
-    )
-    .toString(
-      "base64url"
-    );
-}
+    const date = toDate(order.timestamp);
+    if (!date) continue;
 
+    const monthKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: COLOMBO_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+    }).format(date);
 
-function decodeCursor(
-  cursor
-) {
-  if (!cursor) {
-    return {
-      after:
-        null,
+    if (!trendsByMonth.has(monthKey)) {
+      const [year, month] = monthKey.split("-");
+      trendsByMonth.set(monthKey, {
+        key: monthKey,
+        label: new Intl.DateTimeFormat("en-LK", {
+          month: "short",
+          year: "numeric",
+        }).format(new Date(`${year}-${month}-01T12:00:00${COLOMBO_OFFSET}`)),
+        services: {},
+        totalMonthlyRevenue: 0,
+        totalMonthlyOrders: 0,
+      });
+    }
 
-      history:
-        [],
-    };
-  }
+    const monthBucket = trendsByMonth.get(monthKey);
 
+    for (const service of order.servicesRequested || []) {
+      const name = String(service?.name || "Other");
+      allServiceNames.add(name);
 
-  try {
-    const decoded =
-      JSON.parse(
-        Buffer
-          .from(
-            cursor,
-            "base64url"
-          )
-          .toString(
-            "utf8"
-          )
-      );
+      const price = Number(service?.priceAfterDiscount ?? service?.price ?? 0);
 
-
-    return {
-      after:
-        decoded?.after ||
-        null,
-
-      history:
-        Array.isArray(
-          decoded?.history
-        )
-          ? decoded.history
-          : [],
-    };
-  } catch {
-    return {
-      after:
-        null,
-
-      history:
-        [],
-    };
-  }
-}
-
-
-/* =========================================================
-   ORDER MAPPER
-========================================================= */
-
-function mapOrderDocument(
-  doc
-) {
-  const data =
-    doc.data();
-
-
-  return {
-    id:
-      doc.id,
-
-    orderId:
-      data.orderId ||
-      doc.id,
-
-    customerName:
-      data.customerName ||
-      "",
-
-    mobileNumber:
-      data.mobileNumber ||
-      "",
-
-    brand:
-      data.brand ||
-      "",
-
-    color:
-      data.color ||
-      "",
-
-    shoeType:
-      data.shoeType ||
-      "",
-
-    size:
-      data.size ??
-      "",
-
-    tagNo:
-      data.tagNo ||
-      "",
-
-    orderType:
-      data.orderType ||
-      "",
-
-    orderLocation:
-      data.orderLocation ||
-      "",
-
-    status:
-      data.status ||
-      "",
-
-    timestamp:
-      plain(
-        data.timestamp
-      ),
-
-    date:
-      data.date ||
-      "",
-
-    imageUrls:
-      plain(
-        data.imageUrls ||
-          []
-      ),
-
-    servicesRequested:
-      plain(
-        data.servicesRequested ||
-          []
-      ),
-
-    priceDiscountAmount:
-      Number(
-        data.priceDiscountAmount ||
-          0
-      ),
-
-    priceFinalTotal:
-      Number(
-        data.priceFinalTotal ||
-          0
-      ),
-
-    priceAdjustedTotal:
-      data.priceAdjustedTotal !==
-        null &&
-      data.priceAdjustedTotal !==
-        undefined
-        ? Number(
-            data.priceAdjustedTotal
-          )
-        : null,
-
-    priceAdjustmentReason:
-      data.priceAdjustmentReason ||
-      "",
-
-    priceAdjustedBy:
-      data.priceAdjustedBy ||
-      "",
-
-    priceAdjustedAt:
-      plain(
-        data.priceAdjustedAt
-      ),
-  };
-}
-
-
-/* =========================================================
-   EXPENSE MAPPER
-========================================================= */
-
-function mapExpenseDocument(
-  doc
-) {
-  return {
-    id:
-      doc.id,
-
-    ...plain(
-      doc.data()
-    ),
-  };
-}
-
-
-/* =========================================================
-   FEEDBACK MAPPER
-========================================================= */
-
-function mapFeedbackDocument(
-  doc
-) {
-  return {
-    id:
-      doc.id,
-
-    ...plain(
-      doc.data()
-    ),
-  };
-}
-
-
-/* =========================================================
-   EARLIEST ORDER - CACHED
-
-   Revalidate daily.
-========================================================= */
-
-const getCachedEarliestOrderDate =
-  unstable_cache(
-    async () => {
-      const snapshot =
-        await adminDb
-          .collection(
-            "orders"
-          )
-          .orderBy(
-            "timestamp",
-            "asc"
-          )
-          .limit(1)
-          .get();
-
-
-      if (
-        snapshot.empty
-      ) {
-        return null;
+      if (!monthBucket.services[name]) {
+        monthBucket.services[name] = { count: 0, revenue: 0 };
       }
 
-
-      return (
-        toDateInputValue(
-          snapshot
-            .docs[0]
-            .data()
-            .timestamp
-        ) ||
-        null
-      );
-    },
-
-    [
-      "dsl-earliest-order-date",
-    ],
-
-    {
-      revalidate:
-        86400,
+      monthBucket.services[name].count += 1;
+      monthBucket.services[name].revenue += price;
+      monthBucket.totalMonthlyRevenue += price;
+      monthBucket.totalMonthlyOrders += 1;
     }
-  );
+  }
 
-
-export async function getOrderDateBounds() {
-  const today =
-    getTodayDateInput();
-
-
-  const earliest =
-    await getCachedEarliestOrderDate();
-
+  const sortedMonths = [...trendsByMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v);
 
   return {
-    minDate:
-      earliest ||
-      today,
-
-    maxDate:
-      today,
+    serviceNames: Array.from(allServiceNames),
+    months: sortedMonths,
   };
 }
 
-
 /* =========================================================
-   RAW ORDERS BY RANGE
-
-   Dashboard uses this once because it needs:
-   - revenue
-   - services
-   - status
-   - daily chart
-   - monthly chart
+   MAPPERS
 ========================================================= */
 
+function mapOrderDocument(doc, includePII = true) {
+  const data = doc.data() || {};
+
+  return {
+    id: doc.id,
+    orderId: data.orderId || doc.id,
+    brand: data.brand || "",
+    color: data.color || "",
+    shoeType: data.shoeType || "",
+    size: data.size ?? "",
+    tagNo: data.tagNo || "",
+    orderType: data.orderType || "",
+    orderLocation: data.orderLocation || "",
+    status: data.status || "",
+    timestamp: plain(data.timestamp),
+    date: data.date || "",
+    servicesRequested: plain(data.servicesRequested || []),
+    priceDiscountAmount: Number(data.priceDiscountAmount || 0),
+    priceFinalTotal: Number(data.priceFinalTotal || 0),
+    priceAdjustedTotal:
+      data.priceAdjustedTotal !== null && data.priceAdjustedTotal !== undefined
+        ? Number(data.priceAdjustedTotal)
+        : null,
+    priceAdjustmentReason: data.priceAdjustmentReason || "",
+    priceAdjustedBy: data.priceAdjustedBy || "",
+    priceAdjustedAt: plain(data.priceAdjustedAt),
+    rejectionReason: data.rejectionReason || "",
+    rejectionCost: Number(data.rejectionCost || 0),
+    rejectedBy: data.rejectedBy || "",
+    rejectedAt: plain(data.rejectedAt),
+    customerName: includePII ? data.customerName || "" : "[RESTRICTED]",
+    mobileNumber: includePII ? data.mobileNumber || "" : "[RESTRICTED]",
+    imageUrls: plain(data.imageUrls || []),
+  };
+}
+
+function mapExpenseDocument(doc) {
+  return { id: doc.id, ...plain(doc.data()) };
+}
+
+function mapFeedbackDocument(doc) {
+  return { id: doc.id, ...plain(doc.data()) };
+}
+
+/* =========================================================
+   ORDERS & DASHBOARD DATA FETCHING
+========================================================= */
+
+export async function getOrderStatusCounts(session) {
+  if (session) assertAuthorized(session, ["admin", "manager", "staff"]);
+
+  const collection = adminDb.collection("orders");
+  const [
+    totalSnap,
+    pendingSnap,
+    ongoingSnap,
+    completedSnap,
+    deliveredSnap,
+    rejectedSnap,
+  ] = await Promise.all([
+    collection.count().get(),
+    collection.where("status", "in", ["Pending", "pending"]).count().get(),
+    collection.where("status", "in", ["Ongoing", "ongoing"]).count().get(),
+    collection.where("status", "in", ["Completed", "completed"]).count().get(),
+    collection.where("status", "in", ["Delivered", "delivered"]).count().get(),
+    collection.where("status", "in", ["Rejected", "rejected"]).count().get(),
+  ]);
+
+  return {
+    total: Number(totalSnap.data().count || 0),
+    Pending: Number(pendingSnap.data().count || 0),
+    Ongoing: Number(ongoingSnap.data().count || 0),
+    Completed: Number(completedSnap.data().count || 0),
+    Delivered: Number(deliveredSnap.data().count || 0),
+    Rejected: Number(rejectedSnap.data().count || 0),
+  };
+}
+
+const getCachedEarliestOrderDate = unstable_cache(
+  async () => {
+    const snapshot = await adminDb
+      .collection("orders")
+      .orderBy("timestamp", "asc")
+      .limit(1)
+      .select("timestamp")
+      .get();
+
+    if (snapshot.empty) return null;
+    return toDateInputValue(snapshot.docs[0].data().timestamp) || null;
+  },
+  ["dsl-earliest-order-date"],
+  { revalidate: 86400 }
+);
+
+export async function getOrderDateBounds() {
+  const today = getTodayDateInput();
+  const earliest = await getCachedEarliestOrderDate();
+  return {
+    minDate: earliest || today,
+    maxDate: today,
+  };
+}
+
 export async function getOrders({
+  session,
   from,
   to,
   limit,
+  includePII = true,
 } = {}) {
-  let query =
-    adminDb
-      .collection(
-        "orders"
-      )
-      .orderBy(
-        "timestamp",
-        "desc"
-      );
+  if (session) assertAuthorized(session, ["admin", "manager"]);
 
+  let query = adminDb.collection("orders").orderBy("timestamp", "desc");
 
-  if (from) {
-    query =
-      query.where(
-        "timestamp",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
+  if (from && isValidDateString(from)) {
+    query = query.where("timestamp", ">=", startOfSriLankaDay(from));
+  }
+  if (to && isValidDateString(to)) {
+    query = query.where("timestamp", "<=", endOfSriLankaDay(to));
   }
 
-
-  if (to) {
-    query =
-      query.where(
-        "timestamp",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
+  if (!includePII) {
+    query = query.select(
+      "orderId",
+      "status",
+      "timestamp",
+      "shoeType",
+      "brand",
+      "orderType",
+      "servicesRequested",
+      "priceFinalTotal",
+      "priceAdjustedTotal",
+      "rejectionCost"
+    );
   }
 
+  const fetchLimit = limit ? normalizeScanLimit(limit) : MAX_DASHBOARD_SCAN;
+  query = query.limit(fetchLimit);
 
-  if (
-    limit
-  ) {
-    query =
-      query.limit(
-        normalizePageSize(
-          limit
-        )
-      );
-  }
-
-
-  const snapshot =
-    await query.get();
-
-
-  return snapshot.docs.map(
-    mapOrderDocument
-  );
+  const snapshot = await query.get();
+  return snapshot.docs.map((doc) => mapOrderDocument(doc, includePII));
 }
 
-
-/* =========================================================
-   PAGINATED ORDERS
-
-   Only pageSize + 1 docs requested.
-========================================================= */
-
 export async function getOrdersPage({
-  pageSize =
-    DEFAULT_PAGE_SIZE,
-
+  session,
+  pageSize = DEFAULT_PAGE_SIZE,
   cursor,
-
   status,
+  includePII = true,
 } = {}) {
-  const size =
-    normalizePageSize(
-      pageSize
-    );
+  if (session) assertAuthorized(session, ["admin", "manager", "staff"]);
 
+  const size = normalizePageSize(pageSize);
+  const cursorState = decodeCursor(cursor);
 
-  const cursorState =
-    decodeCursor(
-      cursor
-    );
+  let query = adminDb.collection("orders");
 
-
-  let query =
-    adminDb
-      .collection(
-        "orders"
-      );
-
-
-  if (
-    status &&
-    status !==
-      "All"
-  ) {
-    query =
-      query.where(
-        "status",
-        "==",
-        status
-      );
-  }
-
-
-  query =
-    query
-      .orderBy(
-        "timestamp",
-        "desc"
-      )
-      .orderBy(
-        FieldPath.documentId(),
-        "desc"
-      );
-
-
-  if (
-    cursorState.after
-      ?.timestamp &&
-    cursorState.after
-      ?.id
-  ) {
-    const timestamp =
-      new Date(
-        cursorState
-          .after
-          .timestamp
-      );
-
-
-    if (
-      !Number.isNaN(
-        timestamp.getTime()
-      )
-    ) {
-      query =
-        query.startAfter(
-          timestamp,
-          cursorState
-            .after.id
-        );
+  if (status && status !== "All") {
+    if (/^[a-zA-Z0-9_-]{1,32}$/.test(status)) {
+      query = query.where("status", "==", status);
     }
   }
 
+  query = query.orderBy("timestamp", "desc").orderBy(FieldPath.documentId(), "desc");
 
-  const snapshot =
-    await query
-      .limit(
-        size + 1
-      )
-      .get();
+  if (cursorState.after?.timestamp && cursorState.after?.id) {
+    const timestamp = new Date(cursorState.after.timestamp);
+    if (!Number.isNaN(timestamp.getTime())) {
+      query = query.startAfter(timestamp, cursorState.after.id);
+    }
+  }
 
+  const snapshot = await query.limit(size + 1).get();
+  const hasMore = snapshot.docs.length > size;
+  const pageDocs = hasMore ? snapshot.docs.slice(0, size) : snapshot.docs;
+  const orders = pageDocs.map((doc) => mapOrderDocument(doc, includePII));
 
-  const hasMore =
-    snapshot.docs.length >
-    size;
-
-
-  const pageDocs =
-    hasMore
-      ? snapshot.docs.slice(
-          0,
-          size
-        )
-      : snapshot.docs;
-
-
-  const orders =
-    pageDocs.map(
-      mapOrderDocument
-    );
-
-
-  let nextCursor =
-    null;
-
-
-  if (
-    hasMore &&
-    pageDocs.length
-  ) {
-    const lastDoc =
-      pageDocs[
-        pageDocs.length -
-          1
-      ];
-
-
-    const timestamp =
-      toDate(
-        lastDoc
-          .data()
-          .timestamp
-      );
-
-
+  let nextCursor = null;
+  if (hasMore && pageDocs.length) {
+    const lastDoc = pageDocs[pageDocs.length - 1];
+    const timestamp = toDate(lastDoc.data().timestamp);
     if (timestamp) {
-      nextCursor =
-        encodeCursor({
-          after: {
-            timestamp:
-              timestamp.toISOString(),
-
-            id:
-              lastDoc.id,
-          },
-
-          history: [
-            ...cursorState.history,
-            cursorState.after,
-          ],
-        });
+      nextCursor = encodeCursor({
+        after: {
+          timestamp: timestamp.toISOString(),
+          id: lastDoc.id,
+        },
+        history: [...cursorState.history, cursorState.after],
+      });
     }
   }
 
-
-  let previousCursor =
-    null;
-
-
-  if (
-    cursorState.history.length
-  ) {
-    const previousHistory =
-      [
-        ...cursorState.history,
-      ];
-
-
-    const previousAfter =
-      previousHistory.pop();
-
-
-    previousCursor =
-      encodeCursor({
-        after:
-          previousAfter ||
-          null,
-
-        history:
-          previousHistory,
-      });
+  let previousCursor = null;
+  if (cursorState.history.length) {
+    const previousHistory = [...cursorState.history];
+    const previousAfter = previousHistory.pop();
+    previousCursor = encodeCursor({
+      after: previousAfter || null,
+      history: previousHistory,
+    });
   }
 
-
-  /*
-   * Aggregation count.
-   * Does NOT download every order document.
-   */
-
-  let countQuery =
-    adminDb
-      .collection(
-        "orders"
-      );
-
-
-  if (
-    status &&
-    status !==
-      "All"
-  ) {
-    countQuery =
-      countQuery.where(
-        "status",
-        "==",
-        status
-      );
+  let countQuery = adminDb.collection("orders");
+  if (status && status !== "All" && /^[a-zA-Z0-9_-]{1,32}$/.test(status)) {
+    countQuery = countQuery.where("status", "==", status);
   }
 
-
-  const countSnapshot =
-    await countQuery
-      .count()
-      .get();
-
-
-  const total =
-    Number(
-      countSnapshot
-        .data()
-        .count ||
-        0
-    );
-
+  const countSnapshot = await countQuery.count().get();
 
   return {
     orders,
-
-    total,
-
-    pageSize:
-      size,
-
+    total: Number(countSnapshot.data().count || 0),
+    pageSize: size,
     hasMore,
-
     nextCursor,
-
     previousCursor,
-
-    hasPrevious:
-      Boolean(
-        previousCursor
-      ),
+    hasPrevious: Boolean(previousCursor),
   };
 }
 
+export async function getOrder(orderId, session) {
+  if (session) assertAuthorized(session, ["admin", "manager", "staff"]);
 
-/* =========================================================
-   SINGLE ORDER
-========================================================= */
+  if (!isValidDocId(orderId)) return null;
 
-export async function getOrder(
-  orderId
-) {
-  if (
-    !orderId ||
-    typeof orderId !==
-      "string"
-  ) {
-    return null;
-  }
-
-
-  const doc =
-    await adminDb
-      .collection(
-        "orders"
-      )
-      .doc(
-        orderId
-      )
-      .get();
-
-
-  if (
-    !doc.exists
-  ) {
-    return null;
-  }
-
+  const doc = await adminDb.collection("orders").doc(orderId).get();
+  if (!doc.exists) return null;
 
   let history = [];
-
-
   try {
-    const snapshot =
-      await doc.ref
-        .collection(
-          "priceHistory"
-        )
-        .orderBy(
-          "changedAt",
-          "desc"
-        )
-        .limit(20)
-        .get();
+    const snapshot = await doc.ref
+      .collection("priceHistory")
+      .orderBy("changedAt", "desc")
+      .limit(20)
+      .get();
 
-
-    history =
-      snapshot.docs.map(
-        (historyDoc) => ({
-          id:
-            historyDoc.id,
-
-          ...plain(
-            historyDoc.data()
-          ),
-        })
-      );
-  } catch (
-    error
-  ) {
-    console.error(
-      "PRICE HISTORY ERROR:",
-      error
-    );
+    history = snapshot.docs.map((historyDoc) => ({
+      id: historyDoc.id,
+      ...plain(historyDoc.data()),
+    }));
+  } catch (error) {
+    console.error("PRICE HISTORY ERROR:", error);
   }
 
-
   return {
-    id:
-      doc.id,
-
-    ...plain(
-      doc.data()
-    ),
-
-    priceHistory:
-      history,
+    id: doc.id,
+    ...plain(doc.data()),
+    priceHistory: history,
   };
 }
 
+export async function getExpenses({ session, from, to, limit } = {}) {
+  if (session) assertAuthorized(session, ["admin"]);
 
-/* =========================================================
-   EXPENSES - FULL RANGE
+  let query = adminDb.collection("expenses");
 
-   Keep for places that genuinely need
-   the whole collection/range.
-========================================================= */
+  const snapshot = await query.get();
+  const allExpenses = snapshot.docs.map(mapExpenseDocument);
 
-export async function getExpenses({
-  from,
-  to,
-  limit,
-} = {}) {
-  let query =
-    adminDb
-      .collection(
-        "expenses"
-      )
-      .orderBy(
-        "createdAt",
-        "desc"
-      );
+  const fromDate = from && isValidDateString(from) ? startOfSriLankaDay(from) : null;
+  const toDateLimit = to && isValidDateString(to) ? endOfSriLankaDay(to) : null;
 
+  const filtered = allExpenses.filter((e) => {
+    const expDate = toDate(e.date || e.createdAt || e.timestamp);
+    if (!expDate) return true;
+    if (fromDate && expDate < fromDate) return false;
+    if (toDateLimit && expDate > toDateLimit) return false;
+    return true;
+  });
 
-  if (from) {
-    query =
-      query.where(
-        "createdAt",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
-  }
-
-
-  if (to) {
-    query =
-      query.where(
-        "createdAt",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
-  }
-
+  filtered.sort((a, b) => {
+    const tA = toDate(a.date || a.createdAt || a.timestamp)?.getTime() || 0;
+    const tB = toDate(b.date || b.createdAt || b.timestamp)?.getTime() || 0;
+    return tB - tA;
+  });
 
   if (limit) {
-    query =
-      query.limit(
-        normalizePageSize(
-          limit
-        )
-      );
+    return filtered.slice(0, normalizePageSize(limit));
   }
 
-
-  const snapshot =
-    await query.get();
-
-
-  return snapshot.docs.map(
-    mapExpenseDocument
-  );
+  return filtered;
 }
 
-
-/* =========================================================
-   PAGINATED EXPENSES
-========================================================= */
-
 export async function getExpensesPage({
-  pageSize =
-    DEFAULT_PAGE_SIZE,
-
+  session,
+  pageSize = DEFAULT_PAGE_SIZE,
   cursor,
 } = {}) {
-  const size =
-    normalizePageSize(
-      pageSize
-    );
+  if (session) assertAuthorized(session, ["admin"]);
 
+  const size = normalizePageSize(pageSize);
+  const cursorState = decodeCursor(cursor);
 
-  const cursorState =
-    decodeCursor(
-      cursor
-    );
+  let query = adminDb
+    .collection("expenses")
+    .orderBy("createdAt", "desc")
+    .orderBy(FieldPath.documentId(), "desc");
 
-
-  let query =
-    adminDb
-      .collection(
-        "expenses"
-      )
-      .orderBy(
-        "createdAt",
-        "desc"
-      )
-      .orderBy(
-        FieldPath.documentId(),
-        "desc"
-      );
-
-
-  if (
-    cursorState.after
-      ?.timestamp &&
-    cursorState.after
-      ?.id
-  ) {
-    const timestamp =
-      new Date(
-        cursorState
-          .after
-          .timestamp
-      );
-
-
-    if (
-      !Number.isNaN(
-        timestamp.getTime()
-      )
-    ) {
-      query =
-        query.startAfter(
-          timestamp,
-          cursorState
-            .after.id
-        );
+  if (cursorState.after?.timestamp && cursorState.after?.id) {
+    const timestamp = new Date(cursorState.after.timestamp);
+    if (!Number.isNaN(timestamp.getTime())) {
+      query = query.startAfter(timestamp, cursorState.after.id);
     }
   }
 
+  const snapshot = await query.limit(size + 1).get();
+  const hasMore = snapshot.docs.length > size;
+  const pageDocs = hasMore ? snapshot.docs.slice(0, size) : snapshot.docs;
+  const expenses = pageDocs.map(mapExpenseDocument);
 
-  const snapshot =
-    await query
-      .limit(
-        size + 1
-      )
-      .get();
-
-
-  const hasMore =
-    snapshot.docs.length >
-    size;
-
-
-  const pageDocs =
-    hasMore
-      ? snapshot.docs.slice(
-          0,
-          size
-        )
-      : snapshot.docs;
-
-
-  const expenses =
-    pageDocs.map(
-      mapExpenseDocument
-    );
-
-
-  let nextCursor =
-    null;
-
-
-  if (
-    hasMore &&
-    pageDocs.length
-  ) {
-    const lastDoc =
-      pageDocs[
-        pageDocs.length -
-          1
-      ];
-
-
-    const timestamp =
-      toDate(
-        lastDoc
-          .data()
-          .createdAt
-      );
-
-
+  let nextCursor = null;
+  if (hasMore && pageDocs.length) {
+    const lastDoc = pageDocs[pageDocs.length - 1];
+    const timestamp = toDate(lastDoc.data().createdAt || lastDoc.data().date);
     if (timestamp) {
-      nextCursor =
-        encodeCursor({
-          after: {
-            timestamp:
-              timestamp.toISOString(),
-
-            id:
-              lastDoc.id,
-          },
-
-          history: [
-            ...cursorState.history,
-            cursorState.after,
-          ],
-        });
+      nextCursor = encodeCursor({
+        after: {
+          timestamp: timestamp.toISOString(),
+          id: lastDoc.id,
+        },
+        history: [...cursorState.history, cursorState.after],
+      });
     }
   }
 
-
-  let previousCursor =
-    null;
-
-
-  if (
-    cursorState.history.length
-  ) {
-    const previousHistory =
-      [
-        ...cursorState.history,
-      ];
-
-
-    const previousAfter =
-      previousHistory.pop();
-
-
-    previousCursor =
-      encodeCursor({
-        after:
-          previousAfter ||
-          null,
-
-        history:
-          previousHistory,
-      });
+  let previousCursor = null;
+  if (cursorState.history.length) {
+    const previousHistory = [...cursorState.history];
+    const previousAfter = previousHistory.pop();
+    previousCursor = encodeCursor({
+      after: previousAfter || null,
+      history: previousHistory,
+    });
   }
 
-
-  const countSnapshot =
-    await adminDb
-      .collection(
-        "expenses"
-      )
-      .count()
-      .get();
-
+  const countSnapshot = await adminDb.collection("expenses").count().get();
 
   return {
     expenses,
-
-    total:
-      Number(
-        countSnapshot
-          .data()
-          .count ||
-          0
-      ),
-
-    pageSize:
-      size,
-
+    total: Number(countSnapshot.data().count || 0),
+    pageSize: size,
     hasMore,
-
     nextCursor,
-
     previousCursor,
-
-    hasPrevious:
-      Boolean(
-        previousCursor
-      ),
+    hasPrevious: Boolean(previousCursor),
   };
 }
 
-
 /* =========================================================
-   EXPENSE TOTAL - AGGREGATION
-
-   Dashboard uses this instead of reading
-   every expense document.
+   REVISED & BULLETPROOF getExpenseTotal
 ========================================================= */
 
-export async function getExpenseTotal({
-  from,
-  to,
-} = {}) {
-  let query =
-    adminDb
-      .collection(
-        "expenses"
-      );
-
-
-  if (from) {
-    query =
-      query.where(
-        "createdAt",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
-  }
-
-
-  if (to) {
-    query =
-      query.where(
-        "createdAt",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
-  }
-
-
-  const snapshot =
-    await query
-      .aggregate({
-        total:
-          AggregateField.sum(
-            "amount"
-          ),
-      })
-      .get();
-
-
-  return Number(
-    snapshot
-      .data()
-      .total ||
-      0
-  );
-}
-
-
-/* =========================================================
-   FEEDBACK
-========================================================= */
-
-export async function getFeedback({
-  from,
-  to,
-  limit,
-} = {}) {
-  let query =
-    adminDb
-      .collection(
-        "feedback"
-      )
-      .orderBy(
-        "submittedAt",
-        "desc"
-      );
-
-
-  if (from) {
-    query =
-      query.where(
-        "submittedAt",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
-  }
-
-
-  if (to) {
-    query =
-      query.where(
-        "submittedAt",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
-  }
-
-
-  if (limit) {
-    query =
-      query.limit(
-        normalizePageSize(
-          limit
-        )
-      );
-  }
-
-
-  const snapshot =
-    await query.get();
-
-
-  return snapshot.docs.map(
-    mapFeedbackDocument
-  );
-}
-
-
-/* =========================================================
-   LATEST FEEDBACK ONLY
-========================================================= */
-
-export async function getRecentFeedback({
-  from,
-  to,
-  limit = 3,
-} = {}) {
-  let query =
-    adminDb
-      .collection(
-        "feedback"
-      )
-      .orderBy(
-        "submittedAt",
-        "desc"
-      );
-
-
-  if (from) {
-    query =
-      query.where(
-        "submittedAt",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
-  }
-
-
-  if (to) {
-    query =
-      query.where(
-        "submittedAt",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
-  }
-
-
-  const snapshot =
-    await query
-      .limit(
-        Math.min(
-          Math.max(
-            Number(limit) ||
-              3,
-            1
-          ),
-          10
-        )
-      )
-      .get();
-
-
-  return snapshot.docs.map(
-    mapFeedbackDocument
-  );
-}
-
-
-/* =========================================================
-   FEEDBACK AVERAGE - AGGREGATION
-========================================================= */
-
-export async function getAverageRating({
-  from,
-  to,
-} = {}) {
-  let query =
-    adminDb
-      .collection(
-        "feedback"
-      );
-
-
-  if (from) {
-    query =
-      query.where(
-        "submittedAt",
-        ">=",
-        startOfSriLankaDay(
-          from
-        )
-      );
-  }
-
-
-  if (to) {
-    query =
-      query.where(
-        "submittedAt",
-        "<=",
-        endOfSriLankaDay(
-          to
-        )
-      );
-  }
-
-
-  const snapshot =
-    await query
-      .aggregate({
-        averageRating:
-          AggregateField.average(
-            "rating"
-          ),
-      })
-      .get();
-
-
-  return Number(
-    snapshot
-      .data()
-      .averageRating ||
-      0
-  );
-}
-
-
-/* =========================================================
-   USERS
-========================================================= */
-
-export async function getUsers(
-  limit = 100
-) {
-  const safeLimit =
-    Math.min(
-      500,
-
-      Math.max(
-        1,
-
-        Number(
-          limit
-        ) ||
-          100
-      )
-    );
-
-
-  let snapshot;
-
+export async function getExpenseTotal({ session, from, to } = {}) {
+  if (session) assertAuthorized(session, ["admin", "manager"]);
 
   try {
-    snapshot =
-      await adminDb
-        .collection(
-          "users"
-        )
-        .orderBy(
-          "createdAt",
-          "desc"
-        )
-        .limit(
-          safeLimit
-        )
-        .get();
-  } catch {
-    snapshot =
-      await adminDb
-        .collection(
-          "users"
-        )
-        .limit(
-          safeLimit
-        )
-        .get();
-  }
+    const fromDate = from && isValidDateString(from) ? startOfSriLankaDay(from) : null;
+    const toDateLimit = to && isValidDateString(to) ? endOfSriLankaDay(to) : null;
 
+    // Fetch expense documents to ensure type safety (numbers vs strings) and handle field discrepancies
+    const snapshot = await adminDb.collection("expenses").get();
 
-  return snapshot.docs.map(
-    (doc) => ({
-      id:
-        doc.id,
+    if (snapshot.empty) return 0;
 
-      ...plain(
-        doc.data()
-      ),
-    })
-  );
-}
+    let total = 0;
 
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const rawDate = data.date || data.createdAt || data.timestamp;
+      const expDate = toDate(rawDate);
 
-/* =========================================================
-   SERVICE CATEGORIES
+      // Apply date bounds
+      if (fromDate && expDate && expDate < fromDate) continue;
+      if (toDateLimit && expDate && expDate > toDateLimit) continue;
 
-   Optimized:
-   1 query for categories
-   1 collectionGroup query for services
+      // Handle string amounts ("1500", "1500.00") and number amounts
+      const rawAmount = data.amount ?? data.cost ?? data.price ?? 0;
+      const numAmount = Number(rawAmount);
 
-   instead of:
-   1 + N queries
-========================================================= */
-
-export async function getServiceCategories() {
-  const [
-    categorySnapshot,
-    servicesSnapshot,
-  ] =
-    await Promise.all([
-      adminDb
-        .collection(
-          "service_categories"
-        )
-        .get(),
-
-      adminDb
-        .collectionGroup(
-          "services"
-        )
-        .get(),
-    ]);
-
-
-  const servicesByCategory =
-    new Map();
-
-
-  for (
-    const serviceDoc of
-    servicesSnapshot.docs
-  ) {
-    const categoryId =
-      serviceDoc.ref
-        .parent
-        .parent
-        ?.id;
-
-
-    if (!categoryId) {
-      continue;
+      if (Number.isFinite(numAmount)) {
+        total += numAmount;
+      }
     }
 
+    return total;
+  } catch (error) {
+    console.error("[getExpenseTotal] Failed to compute expense total:", error);
+    return 0;
+  }
+}
 
-    const existing =
-      servicesByCategory.get(
-        categoryId
-      ) || [];
+export async function getFeedback({ session, from, to, limit } = {}) {
+  if (session) assertAuthorized(session, ["admin", "manager"]);
 
+  let query = adminDb.collection("feedback").orderBy("submittedAt", "desc");
 
-    existing.push({
-      id:
-        serviceDoc.id,
+  if (from && isValidDateString(from)) {
+    query = query.where("submittedAt", ">=", startOfSriLankaDay(from));
+  }
+  if (to && isValidDateString(to)) {
+    query = query.where("submittedAt", "<=", endOfSriLankaDay(to));
+  }
+  if (limit) {
+    query = query.limit(normalizePageSize(limit));
+  }
 
-      ...plain(
-        serviceDoc.data()
-      ),
+  const snapshot = await query.get();
+  return snapshot.docs.map(mapFeedbackDocument);
+}
+
+export async function getRecentFeedback({ from, to, limit = 3 } = {}) {
+  let query = adminDb.collection("feedback").orderBy("submittedAt", "desc");
+
+  if (from && isValidDateString(from)) {
+    query = query.where("submittedAt", ">=", startOfSriLankaDay(from));
+  }
+  if (to && isValidDateString(to)) {
+    query = query.where("submittedAt", "<=", endOfSriLankaDay(to));
+  }
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 3, 1), 10);
+  const snapshot = await query.limit(safeLimit).get();
+  return snapshot.docs.map(mapFeedbackDocument);
+}
+
+export async function getAverageRating({ from, to } = {}) {
+  let query = adminDb.collection("feedback");
+
+  if (from && isValidDateString(from)) {
+    query = query.where("submittedAt", ">=", startOfSriLankaDay(from));
+  }
+  if (to && isValidDateString(to)) {
+    query = query.where("submittedAt", "<=", endOfSriLankaDay(to));
+  }
+
+  const snapshot = await query
+    .aggregate({ averageRating: AggregateField.average("rating") })
+    .get();
+
+  return Number(snapshot.data().averageRating || 0);
+}
+
+export async function getUsers(limit = 100, session) {
+  if (session) assertAuthorized(session, ["admin"]);
+
+  const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
+
+  let snapshot;
+  try {
+    snapshot = await adminDb
+      .collection("users")
+      .orderBy("createdAt", "desc")
+      .limit(safeLimit)
+      .get();
+  } catch {
+    snapshot = await adminDb.collection("users").limit(safeLimit).get();
+  }
+
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...plain(doc.data()),
+  }));
+}
+
+export async function getAdminUsers(session) {
+  if (session) assertAuthorized(session, ["admin"]);
+
+  try {
+    const snapshot = await adminDb.collection("adminUsers").get();
+
+    if (snapshot.empty) return [];
+
+    const adminDocs = snapshot.docs.map((doc) => {
+      const data = doc.data() || {};
+      const docEmail = String(data.email || doc.id).trim().toLowerCase();
+      return {
+        id: doc.id,
+        email: docEmail,
+        name: data.name || "Console User",
+        role: data.role || "Admin",
+        active: data.active !== undefined ? Boolean(data.active) : true,
+        ...plain(data),
+      };
     });
 
+    const lookupEmails = adminDocs
+      .map((u) => ({ email: u.email }))
+      .filter((u) => u.email && u.email.includes("@"));
 
-    servicesByCategory.set(
-      categoryId,
-      existing
-    );
+    const authMetaMap = new Map();
+
+    if (lookupEmails.length > 0) {
+      try {
+        const authResult = await adminAuth.getUsers(lookupEmails);
+        authResult.users.forEach((userRecord) => {
+          if (userRecord.email) {
+            authMetaMap.set(userRecord.email.toLowerCase(), {
+              uid: userRecord.uid,
+              lastSignInTime: userRecord.metadata.lastSignInTime || null,
+              creationTime: userRecord.metadata.creationTime || null,
+              disabled: userRecord.disabled,
+            });
+          }
+        });
+      } catch (authErr) {
+        console.warn("[getAdminUsers] Batch Auth lookup warning:", authErr.message);
+      }
+    }
+
+    const result = adminDocs.map((admin) => {
+      const authData = authMetaMap.get(admin.email);
+      return {
+        ...admin,
+        hasAuthAccount: Boolean(authData),
+        authUid: authData?.uid || null,
+        lastSignInTime: authData?.lastSignInTime || null,
+      };
+    });
+
+    return result.sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return timeB - timeA;
+    });
+  } catch (error) {
+    console.error("[getAdminUsers] Firestore fetch error:", error);
+    return [];
   }
+}
 
+export async function getServiceCategories() {
+  const [categorySnapshot, servicesSnapshot] = await Promise.all([
+    adminDb.collection("service_categories").get(),
+    adminDb.collectionGroup("services").get(),
+  ]);
+
+  const servicesByCategory = new Map();
+
+  for (const serviceDoc of servicesSnapshot.docs) {
+    const categoryId = serviceDoc.ref.parent.parent?.id;
+    if (!categoryId) continue;
+
+    const existing = servicesByCategory.get(categoryId) || [];
+    existing.push({
+      id: serviceDoc.id,
+      ...plain(serviceDoc.data()),
+    });
+    servicesByCategory.set(categoryId, existing);
+  }
 
   return categorySnapshot.docs
-    .map(
-      (categoryDoc) => ({
-        id:
-          categoryDoc.id,
-
-        ...plain(
-          categoryDoc.data()
-        ),
-
-        services:
-          servicesByCategory.get(
-            categoryDoc.id
-          ) || [],
-      })
-    )
-    .sort(
-      (a, b) =>
-        String(
-          a.name ||
-            ""
-        ).localeCompare(
-          String(
-            b.name ||
-              ""
-          )
-        )
-    );
+    .map((categoryDoc) => ({
+      id: categoryDoc.id,
+      ...plain(categoryDoc.data()),
+      services: servicesByCategory.get(categoryDoc.id) || [],
+    }))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
-
 /* =========================================================
-   DAILY REVENUE
-========================================================= */
-
-function createDailyRevenue(
-  orders
-) {
-  const map =
-    new Map();
-
-
-  for (
-    const order of
-    orders
-  ) {
-    const date =
-      toDate(
-        order.timestamp
-      );
-
-
-    if (!date) {
-      continue;
-    }
-
-
-    const key =
-      new Intl.DateTimeFormat(
-        "en-CA",
-        {
-          timeZone:
-            COLOMBO_TIMEZONE,
-
-          year:
-            "numeric",
-
-          month:
-            "2-digit",
-
-          day:
-            "2-digit",
-        }
-      ).format(
-        date
-      );
-
-
-    const current =
-      map.get(
-        key
-      ) || {
-        revenue:
-          0,
-
-        orders:
-          0,
-      };
-
-
-    current.revenue +=
-      effectiveRevenue(
-        order
-      );
-
-
-    current.orders +=
-      1;
-
-
-    map.set(
-      key,
-      current
-    );
-  }
-
-
-  return [
-    ...map.entries(),
-  ]
-    .sort(
-      (
-        [a],
-        [b]
-      ) =>
-        a.localeCompare(
-          b
-        )
-    )
-    .map(
-      ([
-        date,
-        values,
-      ]) => ({
-        key:
-          date,
-
-        label:
-          new Intl.DateTimeFormat(
-            "en-LK",
-            {
-              timeZone:
-                COLOMBO_TIMEZONE,
-
-              day:
-                "numeric",
-
-              month:
-                "short",
-            }
-          ).format(
-            new Date(
-              `${date}T12:00:00${COLOMBO_OFFSET}`
-            )
-          ),
-
-        revenue:
-          values.revenue,
-
-        orders:
-          values.orders,
-      })
-    );
-}
-
-
-/* =========================================================
-   MONTHLY REVENUE
-========================================================= */
-
-function createMonthlyRevenue(
-  orders
-) {
-  const map =
-    new Map();
-
-
-  for (
-    const order of
-    orders
-  ) {
-    const date =
-      toDate(
-        order.timestamp
-      );
-
-
-    if (!date) {
-      continue;
-    }
-
-
-    const key =
-      new Intl.DateTimeFormat(
-        "en-CA",
-        {
-          timeZone:
-            COLOMBO_TIMEZONE,
-
-          year:
-            "numeric",
-
-          month:
-            "2-digit",
-        }
-      ).format(
-        date
-      );
-
-
-    const current =
-      map.get(
-        key
-      ) || {
-        revenue:
-          0,
-
-        orders:
-          0,
-      };
-
-
-    current.revenue +=
-      effectiveRevenue(
-        order
-      );
-
-
-    current.orders +=
-      1;
-
-
-    map.set(
-      key,
-      current
-    );
-  }
-
-
-  return [
-    ...map.entries(),
-  ]
-    .sort(
-      (
-        [a],
-        [b]
-      ) =>
-        a.localeCompare(
-          b
-        )
-    )
-    .map(
-      ([
-        key,
-        values,
-      ]) => {
-        const [
-          year,
-          month,
-        ] =
-          key.split(
-            "-"
-          );
-
-
-        return {
-          key,
-
-          label:
-            new Intl.DateTimeFormat(
-              "en-LK",
-              {
-                month:
-                  "short",
-
-                year:
-                  "numeric",
-              }
-            ).format(
-              new Date(
-                `${year}-${month}-01T12:00:00${COLOMBO_OFFSET}`
-              )
-            ),
-
-          revenue:
-            values.revenue,
-
-          orders:
-            values.orders,
-        };
-      }
-    );
-}
-
-
-/* =========================================================
-   DASHBOARD
-
-   Optimized current-schema approach:
-
-   Orders:
-     one selected-range query
-
-   Expenses:
-     SUM aggregation only
-
-   Feedback:
-     AVG aggregation + latest 3 only
-
-   Earliest date:
-     cached
+   DASHBOARD DATA ENGINE
 ========================================================= */
 
 export async function getDashboardData({
+  session,
   from,
   to,
 } = {}) {
-  const bounds =
-    await getOrderDateBounds();
+  if (session) assertAuthorized(session, ["admin", "manager"]);
 
-
-  const today =
-    bounds.maxDate;
-
-
-  const currentMonthStart =
-    getCurrentMonthStart();
-
+  const bounds = await getOrderDateBounds();
+  const today = bounds.maxDate;
+  const currentMonthStart = getCurrentMonthStart();
 
   let selectedFrom =
-    from ||
-    (
-      currentMonthStart <
-      bounds.minDate
-        ? bounds.minDate
-        : currentMonthStart
+    from && isValidDateString(from)
+      ? from
+      : currentMonthStart < bounds.minDate
+      ? bounds.minDate
+      : currentMonthStart;
+
+  let selectedTo = to && isValidDateString(to) ? to : today;
+
+  if (selectedFrom < bounds.minDate) selectedFrom = bounds.minDate;
+  if (selectedTo > today) selectedTo = today;
+  if (selectedFrom > selectedTo) selectedFrom = selectedTo;
+
+  const rangeSpan = daysInclusive(selectedFrom, selectedTo);
+  if (rangeSpan > MAX_DATE_RANGE_DAYS) {
+    const adjustedStart = new Date(
+      startOfSriLankaDay(selectedTo).getTime() - (MAX_DATE_RANGE_DAYS - 1) * 86400000
     );
-
-
-  let selectedTo =
-    to ||
-    today;
-
-
-  if (
-    selectedFrom <
-    bounds.minDate
-  ) {
-    selectedFrom =
-      bounds.minDate;
+    selectedFrom = toDateInputValue(adjustedStart);
   }
 
-
-  if (
-    selectedTo >
-    today
-  ) {
-    selectedTo =
-      today;
-  }
-
-
-  if (
-    selectedFrom >
-    selectedTo
-  ) {
-    selectedFrom =
-      selectedTo;
-  }
-
-
-  const [
-    orders,
-    totalExpenses,
-    avgRating,
-    recentFeedback,
-  ] =
+  // Fetch orders, expenses, rating, and feedback in parallel
+  const [orders, totalExpenses, avgRating, recentFeedback, recentOrders] =
     await Promise.all([
       getOrders({
-        from:
-          selectedFrom,
-
-        to:
-          selectedTo,
+        session,
+        from: selectedFrom,
+        to: selectedTo,
+        limit: MAX_DASHBOARD_SCAN,
+        includePII: false,
       }),
-
-      getExpenseTotal({
-        from:
-          selectedFrom,
-
-        to:
-          selectedTo,
-      }),
-
-      getAverageRating({
-        from:
-          selectedFrom,
-
-        to:
-          selectedTo,
-      }),
-
-      getRecentFeedback({
-        from:
-          selectedFrom,
-
-        to:
-          selectedTo,
-
-        limit:
-          3,
+      getExpenseTotal({ session, from: selectedFrom, to: selectedTo }),
+      getAverageRating({ from: selectedFrom, to: selectedTo }),
+      getRecentFeedback({ from: selectedFrom, to: selectedTo, limit: 3 }),
+      getOrders({
+        session,
+        from: selectedFrom,
+        to: selectedTo,
+        limit: 8,
+        includePII: true,
       }),
     ]);
 
-
-  /* =====================================================
-     FINANCIAL
-  ===================================================== */
-
-  const totalRevenue =
-    orders.reduce(
-      (
-        sum,
-        order
-      ) =>
-        sum +
-        effectiveRevenue(
-          order
-        ),
-      0
-    );
-
-
-  /* =====================================================
-     STATUS
-  ===================================================== */
+  let totalRevenue = 0;
+  let totalRejectionCost = 0;
+  let rejectedOrdersCount = 0;
 
   const statusCounts = {
-    Pending:
-      0,
-
-    Ongoing:
-      0,
-
-    Completed:
-      0,
-
-    Delivered:
-      0,
-
-    Other:
-      0,
+    Pending: 0,
+    Ongoing: 0,
+    Completed: 0,
+    Delivered: 0,
+    Rejected: 0,
+    Other: 0,
   };
 
+  const serviceMap = new Map();
+  let totalServicesRequestedCount = 0;
 
-  /* =====================================================
-     SERVICES
-  ===================================================== */
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
+    const status = String(order.status || "Other");
+    const isRejected = status.toLowerCase() === "rejected";
 
-  const serviceMap =
-    new Map();
-
-
-  let totalServicesRequestedCount =
-    0;
-
-
-  for (
-    const order of
-    orders
-  ) {
-    const status =
-      String(
-        order.status ||
-          "Other"
-      );
-
-
-    if (
-      Object.prototype.hasOwnProperty.call(
-        statusCounts,
-        status
-      )
-    ) {
-      statusCounts[
-        status
-      ] +=
-        1;
+    if (isRejected) {
+      statusCounts.Rejected += 1;
+      rejectedOrdersCount += 1;
+      totalRejectionCost += Number(order.rejectionCost || 0);
     } else {
-      statusCounts.Other +=
-        1;
-    }
+      totalRevenue += effectiveRevenue(order);
 
+      if (Object.prototype.hasOwnProperty.call(statusCounts, status)) {
+        statusCounts[status] += 1;
+      } else {
+        statusCounts.Other += 1;
+      }
 
-    for (
-      const service of
-      order.servicesRequested ||
-      []
-    ) {
-      totalServicesRequestedCount +=
-        1;
-
-
-      const name =
-        String(
-          service?.name ||
-            "Other"
-        );
-
-
-      const current =
-        serviceMap.get(
-          name
-        ) || {
-          name,
-
-          count:
-            0,
-
-          revenue:
-            0,
-        };
-
-
-      current.count +=
-        1;
-
-
-      current.revenue +=
-        Number(
-          service
-            ?.priceAfterDiscount ??
-            service?.price ??
-            0
-        );
-
-
-      serviceMap.set(
-        name,
-        current
-      );
+      const services = order.servicesRequested || [];
+      for (let j = 0; j < services.length; j++) {
+        const service = services[j];
+        totalServicesRequestedCount += 1;
+        const name = String(service?.name || "Other");
+        const current = serviceMap.get(name) || { name, count: 0, revenue: 0 };
+        current.count += 1;
+        current.revenue += Number(service?.priceAfterDiscount ?? service?.price ?? 0);
+        serviceMap.set(name, current);
+      }
     }
   }
 
+  const totalServiceGrossRevenue = [...serviceMap.values()].reduce(
+    (sum, item) => sum + item.revenue,
+    0
+  );
 
-  const serviceBreakdown =
-    [
-      ...serviceMap.values(),
-    ].sort(
-      (a, b) =>
-        b.count -
-        a.count
-    );
+  const serviceBreakdown = [...serviceMap.values()]
+    .map((item) => ({
+      ...item,
+      revenueContributionPct: totalServiceGrossRevenue
+        ? Number(((item.revenue / totalServiceGrossRevenue) * 100).toFixed(1))
+        : 0,
+      orderVolumePct: totalServicesRequestedCount
+        ? Number(((item.count / totalServicesRequestedCount) * 100).toFixed(1))
+        : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 
+  const selectedDays = daysInclusive(selectedFrom, selectedTo);
+  const totalOrders = orders.length;
+  const activeOrdersCount = totalOrders - rejectedOrdersCount;
 
-  /* =====================================================
-     AVERAGES
-  ===================================================== */
-
-  const selectedDays =
-    daysInclusive(
-      selectedFrom,
-      selectedTo
-    );
-
-
-  const totalOrders =
-    orders.length;
-
-
-  const averageOrdersPerDay =
-    selectedDays
-      ? totalOrders /
-        selectedDays
-      : 0;
-
-
-  const averageOrderValue =
-    totalOrders
-      ? totalRevenue /
-        totalOrders
-      : 0;
-
-
-  /* =====================================================
-     RETURN
-  ===================================================== */
+  // NET REVENUE DEDUCTION
+  const netRevenue = totalRevenue - totalExpenses - totalRejectionCost;
 
   return {
     selectedFrom,
-
     selectedTo,
-
-    minDate:
-      bounds.minDate,
-
-    maxDate:
-      today,
-
+    minDate: bounds.minDate,
+    maxDate: today,
     selectedDays,
-
     totalOrders,
-
+    activeOrdersCount,
+    rejectedOrdersCount,
     totalRevenue,
-
     totalExpenses,
-
-    netRevenue:
-      totalRevenue -
-      totalExpenses,
-
-    averageOrderValue,
-
-    averageOrdersPerDay,
-
+    totalRejectionCost,
+    netRevenue,
+    averageOrderValue: activeOrdersCount ? totalRevenue / activeOrdersCount : 0,
+    averageOrdersPerDay: selectedDays ? totalOrders / selectedDays : 0,
     statusCounts,
-
     serviceBreakdown,
-
+    totalServiceGrossRevenue,
     totalServicesRequestedCount,
-
     avgRating,
-
-    recentOrders:
-      orders.slice(
-        0,
-        8
-      ),
-
+    recentOrders,
     recentFeedback,
-
-    dailyRevenue:
-      createDailyRevenue(
-        orders
-      ),
-
-    monthlyRevenue:
-      createMonthlyRevenue(
-        orders
-      ),
+    dailyRevenue: createDailyRevenue(orders),
+    monthlyRevenue: createMonthlyRevenue(orders),
+    serviceMonthlyTrends: createMonthlyServiceTrends(orders),
   };
+}
+
+/* =========================================================
+   REVENUE CHART GENERATORS (OPTIMIZED)
+========================================================= */
+
+function createDailyRevenue(orders) {
+  const map = new Map();
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
+    const rev = effectiveRevenue(order);
+    if (rev <= 0 && String(order.status || "").toLowerCase() === "rejected") {
+      continue;
+    }
+
+    const date = toDate(order.timestamp);
+    if (!date) continue;
+    const key = toDateInputValue(date);
+    const current = map.get(key) || { revenue: 0, orders: 0 };
+    current.revenue += rev;
+    current.orders += 1;
+    map.set(key, current);
+  }
+
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, values]) => ({
+      key: date,
+      label: new Intl.DateTimeFormat("en-LK", {
+        timeZone: COLOMBO_TIMEZONE,
+        day: "numeric",
+        month: "short",
+      }).format(new Date(`${date}T12:00:00${COLOMBO_OFFSET}`)),
+      revenue: values.revenue,
+      orders: values.orders,
+    }));
+}
+
+function createMonthlyRevenue(orders) {
+  const map = new Map();
+  for (let i = 0; i < orders.length; i++) {
+    const order = orders[i];
+    const rev = effectiveRevenue(order);
+    if (rev <= 0 && String(order.status || "").toLowerCase() === "rejected") {
+      continue;
+    }
+
+    const date = toDate(order.timestamp);
+    if (!date) continue;
+    const key = new Intl.DateTimeFormat("en-CA", {
+      timeZone: COLOMBO_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+    }).format(date);
+    const current = map.get(key) || { revenue: 0, orders: 0 };
+    current.revenue += rev;
+    current.orders += 1;
+    map.set(key, current);
+  }
+
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, values]) => {
+      const [year, month] = key.split("-");
+      return {
+        key,
+        label: new Intl.DateTimeFormat("en-LK", {
+          month: "short",
+          year: "numeric",
+        }).format(new Date(`${year}-${month}-01T12:00:00${COLOMBO_OFFSET}`)),
+        revenue: values.revenue,
+        orders: values.orders,
+      };
+    });
+}
+
+/* =========================================================
+   SHOE LAUNDRY WALK-IN COUNTER & SERVICE BUNDLING ENGINE
+========================================================= */
+
+export async function getFinancialIntelligenceData({ session, from, to } = {}) {
+  if (session) assertAuthorized(session, ["admin"]);
+
+  const baseData = await getDashboardData({ session, from, to });
+
+  const grossRevenue = Number(baseData.totalRevenue || 0);
+  const overheadExpenses = Number(baseData.totalExpenses || 0);
+  const rejectionLoss = Number(baseData.totalRejectionCost || 0);
+  const netOperatingProfit = Number(baseData.netRevenue || 0);
+  const totalOrders = Number(baseData.totalOrders || 0);
+  const activeOrders = Number(baseData.activeOrdersCount || 0);
+  const rejectedOrders = Number(baseData.rejectedOrdersCount || 0);
+  const totalServicesRequested = Number(baseData.totalServicesRequestedCount || 0);
+
+  // 1. Walk-in Counter Financial Ratios
+  const netProfitMargin = grossRevenue > 0
+    ? Number(((netOperatingProfit / grossRevenue) * 100).toFixed(1))
+    : 0;
+
+  const operatingExpenseRatio = grossRevenue > 0
+    ? Number(((overheadExpenses / grossRevenue) * 100).toFixed(1))
+    : 0;
+
+  const rejectionDragRatio = grossRevenue > 0
+    ? Number(((rejectionLoss / grossRevenue) * 100).toFixed(2))
+    : 0;
+
+  // 2. Unit Economics: Multi-Service Bundling per Pair
+  const aov = activeOrders > 0 ? Math.round(grossRevenue / activeOrders) : 0;
+  const netProfitPerPair = activeOrders > 0 ? Math.round(netOperatingProfit / activeOrders) : 0;
+  const servicesPerPair = activeOrders > 0 ? (totalServicesRequested / activeOrders).toFixed(1) : "1.0";
+  const averageRejectionCost = rejectedOrders > 0 ? Math.round(rejectionLoss / rejectedOrders) : 0;
+
+  // 3. Benchmarks for In-Store Counter Operations
+  const marginHealth = netProfitMargin >= 55 ? "Optimal" : netProfitMargin >= 42 ? "Healthy" : "Compressed";
+  const expenseHealth = operatingExpenseRatio <= 32 ? "Lean Bench" : operatingExpenseRatio <= 45 ? "Moderate" : "High Burn";
+  const leakageHealth = rejectionDragRatio <= 1.5 ? "Clean Intake" : rejectionDragRatio <= 3.0 ? "Counter Leaks" : "Inspection Drag";
+
+  // 4. MoM Growth Velocity
+  const monthlyTrends = (baseData.monthlyRevenue || []).map((curr, idx, arr) => {
+    const prev = arr[idx - 1];
+    let momRevenueGrowth = 0;
+    let momOrdersGrowth = 0;
+
+    if (prev && prev.revenue > 0) {
+      momRevenueGrowth = Number((((curr.revenue - prev.revenue) / prev.revenue) * 100).toFixed(1));
+    }
+    if (prev && prev.orders > 0) {
+      momOrdersGrowth = Number((((curr.orders - prev.orders) / prev.orders) * 100).toFixed(1));
+    }
+
+    return {
+      ...curr,
+      momRevenueGrowth,
+      momOrdersGrowth,
+      aov: curr.orders > 0 ? Math.round(curr.revenue / curr.orders) : 0,
+    };
+  });
+
+  // 5. WALK-IN DROP-OFF SPECIFIC GROWTH SIMULATIONS
+  // Lever 1: Counter Upsell (Add-On Service Attachment)
+  // When dropping off for a standard clean, staff upsells an add-on (e.g., Sole De-Yellowing or Nanotech Protection @ LKR 650) on 30% of pairs
+  const counterUpsellLift = Math.round(activeOrders * 0.30 * 650);
+
+  // Lever 2: Front-Desk Defect Triage Training
+  // Front counter staff catches crumbled soles and unserviceable tears BEFORE writing the intake ticket (recapturing 80% of wasted inspection time/supplies)
+  const counterTriageRecovery = Math.round(rejectionLoss * 0.80);
+
+  // Lever 3: Bulk Supply & Solvent Sourcing
+  // Bulk purchasing of sneaker cleaning foams, microfiber sets, and suede brushes cuts shop OPEX by 15%
+  const supplyBulkSavings = Math.round(overheadExpenses * 0.15);
+
+  const levers = {
+    counterUpsellLift,
+    counterTriageRecovery,
+    supplyBulkSavings,
+    totalSimulatedLift: counterUpsellLift + counterTriageRecovery + supplyBulkSavings,
+  };
+
+  return {
+    ...baseData,
+    grossRevenue,
+    overheadExpenses,
+    rejectionLoss,
+    netOperatingProfit,
+    netProfitMargin,
+    operatingExpenseRatio,
+    rejectionDragRatio,
+    aov,
+    netProfitPerPair,
+    servicesPerPair,
+    averageRejectionCost,
+    marginHealth,
+    expenseHealth,
+    leakageHealth,
+    monthlyTrends,
+    levers,
+  };
+}
+
+/* =========================================================
+   STRATEGIC ACTIONS & EVENT IMPACT ATTRIBUTION ENGINE
+========================================================= */
+
+export async function getStrategicActionsWithAttribution({ session, from, to } = {}) {
+  if (session) assertAuthorized(session, ["admin", "manager"]);
+
+  // 1. Fetch recorded milestone actions
+  const actionsSnap = await adminDb
+    .collection("strategic_actions")
+    .orderBy("actionDate", "desc")
+    .limit(25)
+    .get();
+
+  if (actionsSnap.empty) {
+    return [];
+  }
+
+  // 2. Fetch full scan orders to evaluate pre vs post impact
+  const orders = await getOrders({
+    session,
+    from: from || undefined,
+    to: to || undefined,
+    limit: 3500,
+    includePII: false,
+  });
+
+  const actions = actionsSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...plain(doc.data()),
+  }));
+
+  // 3. Measure Pre-Event vs Post-Event metrics per action
+  return actions.map((act) => {
+    const actTimestamp = new Date(act.actionDate).getTime();
+    const windowDays = Number(act.evalWindowDays) || 14;
+    const windowMs = windowDays * 86400000;
+
+    let preRevenue = 0;
+    let preOrders = 0;
+    let postRevenue = 0;
+    let postOrders = 0;
+
+    for (const order of orders) {
+      if (String(order.status || "").toLowerCase() === "rejected") continue;
+      const orderDate = toDate(order.timestamp);
+      if (!orderDate) continue;
+
+      const orderTime = orderDate.getTime();
+      const rev = effectiveRevenue(order);
+
+      // Pre-action window: [actTime - windowMs, actTime)
+      if (orderTime >= actTimestamp - windowMs && orderTime < actTimestamp) {
+        preRevenue += rev;
+        preOrders += 1;
+      }
+
+      // Post-action window: [actTime, actTime + windowMs]
+      if (orderTime >= actTimestamp && orderTime <= actTimestamp + windowMs) {
+        postRevenue += rev;
+        postOrders += 1;
+      }
+    }
+
+    const preDailyAvg = windowDays > 0 ? preRevenue / windowDays : 0;
+    const postDailyAvg = windowDays > 0 ? postRevenue / windowDays : 0;
+
+    const preAov = preOrders > 0 ? preRevenue / preOrders : 0;
+    const postAov = postOrders > 0 ? postRevenue / postOrders : 0;
+
+    const revenueDeltaPct = preRevenue > 0
+      ? Number((((postRevenue - preRevenue) / preRevenue) * 100).toFixed(1))
+      : postRevenue > 0 ? 100 : 0;
+
+    const aovDeltaPct = preAov > 0
+      ? Number((((postAov - preAov) / preAov) * 100).toFixed(1))
+      : 0;
+
+    return {
+      ...act,
+      metrics: {
+        windowDays,
+        preRevenue,
+        postRevenue,
+        preOrders,
+        postOrders,
+        preDailyAvg: Math.round(preDailyAvg),
+        postDailyAvg: Math.round(postDailyAvg),
+        preAov: Math.round(preAov),
+        postAov: Math.round(postAov),
+        revenueDeltaPct,
+        aovDeltaPct,
+        status: postRevenue >= preRevenue ? "positive" : "negative",
+      },
+    };
+  });
 }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 export default function PriceAdjuster({
   orderId,
+  orderNumber,
+  customerName,
   currentAmount,
   originalFinalAmount,
 }) {
@@ -14,6 +16,9 @@ export default function PriceAdjuster({
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  const displayOrderNum = orderNumber || orderId;
+  const displayName = customerName || "Customer";
 
   async function submit(e) {
     e.preventDefault();
@@ -60,8 +65,8 @@ export default function PriceAdjuster({
       {open && (
         <div className="modal-backdrop" onMouseDown={() => !saving && setOpen(false)}>
           <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-            <p className="eyebrow">Revenue adjustment</p>
-            <h2 className="modal-title">Adjust order price</h2>
+            <p className="eyebrow">Revenue adjustment · Order #{displayOrderNum}</p>
+            <h2 className="modal-title">{displayName}</h2>
             <p className="page-subtitle">
               The original final amount is kept. Dashboard revenue will use the
               newest adjusted amount.

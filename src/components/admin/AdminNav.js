@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-
 const links = [
   {
     href: "/admin",
@@ -19,16 +18,22 @@ const links = [
     icon: OrdersIcon,
   },
   {
-    href: "/admin/services",
-    label: "Services",
-    description: "Service catalogue",
-    icon: ServicesIcon,
+    href: "/admin/financial",
+    label: "Financial Overview",
+    description: "Growth & margin analytics",
+    icon: GrowthIcon,
   },
   {
     href: "/admin/expenses",
     label: "Expenses",
     description: "Cost management",
     icon: ExpenseIcon,
+  },
+  {
+    href: "/admin/services",
+    label: "Services",
+    description: "Service catalogue",
+    icon: ServicesIcon,
   },
   {
     href: "/admin/feedback",
@@ -44,7 +49,6 @@ const links = [
   },
 ];
 
-
 function isActive(pathname, href) {
   if (href === "/admin") {
     return pathname === "/admin";
@@ -52,7 +56,6 @@ function isActive(pathname, href) {
 
   return pathname.startsWith(href);
 }
-
 
 function getInitial(session) {
   const value =
@@ -65,7 +68,6 @@ function getInitial(session) {
     .charAt(0)
     .toUpperCase();
 }
-
 
 export default function AdminNav({
   session,
@@ -91,7 +93,6 @@ export default function AdminNav({
         {/* Decorative glow */}
         <div className="sidebar-glow sidebar-glow-top" />
         <div className="sidebar-glow sidebar-glow-bottom" />
-
 
         {/* ======================================
             BRAND
@@ -125,15 +126,12 @@ export default function AdminNav({
             </div>
           </Link>
 
-
           <div className="sidebar-console-label">
             <span className="console-status-dot" />
-
             Management Console
           </div>
 
         </div>
-
 
         {/* ======================================
             MENU TITLE
@@ -142,7 +140,6 @@ export default function AdminNav({
         <div className="sidebar-section-label">
           Workspace
         </div>
-
 
         {/* ======================================
             NAVIGATION
@@ -177,11 +174,9 @@ export default function AdminNav({
                 {/* Active indicator */}
                 <span className="nav-active-bar" />
 
-
                 <span className="nav-icon">
                   <Icon />
                 </span>
-
 
                 <span className="nav-copy">
 
@@ -195,7 +190,6 @@ export default function AdminNav({
 
                 </span>
 
-
                 <span className="nav-arrow">
                   <ArrowIcon />
                 </span>
@@ -205,7 +199,6 @@ export default function AdminNav({
           })}
 
         </nav>
-
 
         {/* ======================================
             BOTTOM PROFILE
@@ -219,7 +212,6 @@ export default function AdminNav({
               {getInitial(session)}
             </div>
 
-
             <div className="profile-info">
 
               <div className="profile-name">
@@ -232,13 +224,11 @@ export default function AdminNav({
 
             </div>
 
-
             <span className="profile-online">
               <span />
             </span>
 
           </div>
-
 
           <form
             action="api/auth/logout"
@@ -259,7 +249,6 @@ export default function AdminNav({
 
           </form>
 
-
           <div className="sidebar-version">
             <span>
               DSL Console
@@ -273,7 +262,6 @@ export default function AdminNav({
         </div>
 
       </aside>
-
 
       {/* ======================================
           MOBILE NAVIGATION
@@ -309,11 +297,9 @@ export default function AdminNav({
 
         </Link>
 
-
         <div className="mobile-user">
           {getInitial(session)}
         </div>
-
 
         <div className="mobile-nav-scroll">
 
@@ -358,8 +344,6 @@ export default function AdminNav({
   );
 }
 
-
-
 /* =========================================================
    ICONS
 ========================================================= */
@@ -379,7 +363,6 @@ function DashboardIcon() {
         height="7"
         rx="2"
       />
-
       <rect
         x="14"
         y="3"
@@ -387,7 +370,6 @@ function DashboardIcon() {
         height="7"
         rx="2"
       />
-
       <rect
         x="3"
         y="14"
@@ -395,7 +377,6 @@ function DashboardIcon() {
         height="7"
         rx="2"
       />
-
       <rect
         x="14"
         y="14"
@@ -406,7 +387,6 @@ function DashboardIcon() {
     </svg>
   );
 }
-
 
 function OrdersIcon() {
   return (
@@ -419,15 +399,26 @@ function OrdersIcon() {
       <path
         d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"
       />
-
       <path d="M9 3v3h6V3" />
-
       <path d="M8 11h8" />
       <path d="M8 15h6" />
     </svg>
   );
 }
 
+function GrowthIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
+    </svg>
+  );
+}
 
 function ServicesIcon() {
   return (
@@ -440,14 +431,12 @@ function ServicesIcon() {
       <path
         d="m12 3 1.6 4.1L18 9l-4.4 1.9L12 15l-1.6-4.1L6 9l4.4-1.9L12 3Z"
       />
-
       <path
         d="m18 15 .9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15Z"
       />
     </svg>
   );
 }
-
 
 function ExpenseIcon() {
   return (
@@ -464,13 +453,11 @@ function ExpenseIcon() {
         height="14"
         rx="3"
       />
-
       <path d="M3 10h18" />
       <path d="M7 15h3" />
     </svg>
   );
 }
-
 
 function FeedbackIcon() {
   return (
@@ -483,14 +470,12 @@ function FeedbackIcon() {
       <path
         d="M21 12a8 8 0 0 1-8 8H6l-3 2v-6a8 8 0 1 1 18-4Z"
       />
-
       <path
         d="m12 7 1.1 2.2 2.4.3-1.8 1.7.5 2.4-2.2-1.1-2.2 1.1.5-2.4-1.8-1.7 2.4-.3L12 7Z"
       />
     </svg>
   );
 }
-
 
 function UsersIcon() {
   return (
@@ -505,22 +490,18 @@ function UsersIcon() {
         cy="8"
         r="3"
       />
-
       <path
         d="M3.5 19c.5-3.2 2.4-5 5.5-5s5 1.8 5.5 5"
       />
-
       <path
         d="M16 7.5a2.5 2.5 0 0 1 0 5"
       />
-
       <path
         d="M17 14.5c2.2.5 3.4 2 3.5 4.5"
       />
     </svg>
   );
 }
-
 
 function ArrowIcon() {
   return (
@@ -535,7 +516,6 @@ function ArrowIcon() {
   );
 }
 
-
 function LogoutIcon() {
   return (
     <svg
@@ -547,7 +527,6 @@ function LogoutIcon() {
       <path
         d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5"
       />
-
       <path d="M14 8l4 4-4 4" />
       <path d="M18 12H8" />
     </svg>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import OrdersClient from "@/components/admin/OrdersClient";
-import { getOrdersPage } from "@/lib/admin-data";
+import { getOrdersPage, getOrderStatusCounts } from "@/lib/admin-data";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +56,15 @@ function TruckIcon() {
   );
 }
 
+function BanIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m4.93 4.93 14.14 14.14" />
+    </svg>
+  );
+}
+
 function ArrowLeftIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -105,33 +114,28 @@ export default async function OrdersPage({ searchParams }) {
   const cursor = typeof params?.cursor === "string" ? params.cursor : undefined;
   const q = typeof params?.q === "string" ? params.q : "";
 
-  const data = await getOrdersPage({
-    pageSize: 20,
-    cursor,
-    status,
-    q,
-  });
+  // Query paginated items and live status aggregation in parallel
+  const [data, statusCounts] = await Promise.all([
+    getOrdersPage({
+      pageSize: 20,
+      cursor,
+      status,
+    }),
+    getOrderStatusCounts(),
+  ]);
 
   const visibleCount = data.orders.length;
-  const totalCount = Number(data.total || 0);
+  const totalCount = Number(statusCounts.total || data.total || 0);
 
-  // Status breakdown counts (derived safely from data.statusCounts or default values)
-  const statusCounts = {
-    Pending: Number(data.statusCounts?.Pending || 0),
-    Ongoing: Number(data.statusCounts?.Ongoing || 0),
-    Completed: Number(data.statusCounts?.Completed || 0),
-    Delivered: Number(data.statusCounts?.Delivered || 0),
-  };
+  const pendingCount = Number(statusCounts.Pending || 0);
+  const ongoingCount = Number(statusCounts.Ongoing || 0);
+  const completedCount = Number(statusCounts.Completed || 0);
+  const deliveredCount = Number(statusCounts.Delivered || 0);
+  const rejectedCount = Number(statusCounts.Rejected || 0);
 
-  const calculatedTotal =
-    totalCount ||
-    statusCounts.Pending +
-      statusCounts.Ongoing +
-      statusCounts.Completed +
-      statusCounts.Delivered ||
-    1;
+  const baseForPercentages = totalCount > 0 ? totalCount : 1;
 
-  // Status KPI Card Definitions
+  // Complete KPI Definition List (Including Rejected)
   const statusKpis = [
     {
       label: "All Orders",
@@ -144,59 +148,72 @@ export default async function OrdersPage({ searchParams }) {
       toneChip: "bg-[#EAF7FA] text-[#087C99]",
       glowColor: "after:bg-[#0094B6]/[0.06]",
       barColor: "bg-gradient-to-r from-[#0094B6] to-[#6CB3C4]",
-      subtext: "Total workflow ledger",
+      subtext: "Entire database ledger",
     },
     {
       label: "Pending",
       valueKey: "Pending",
-      count: statusCounts.Pending,
-      percentage: Math.round((statusCounts.Pending / calculatedTotal) * 100),
+      count: pendingCount,
+      percentage: Math.round((pendingCount / baseForPercentages) * 100),
       icon: <ClockIcon />,
       toneText: "text-[#966410]",
       toneBg: "bg-[#FFF6DC]",
       toneChip: "bg-[#FFF6DC] text-[#966410]",
       glowColor: "after:bg-[#E4A83B]/10",
       barColor: "bg-gradient-to-r from-[#DFA33B] to-[#F3C66A]",
-      subtext: "Awaiting initial intake",
+      subtext: "Waiting for processing",
     },
     {
       label: "Ongoing",
       valueKey: "Ongoing",
-      count: statusCounts.Ongoing,
-      percentage: Math.round((statusCounts.Ongoing / calculatedTotal) * 100),
+      count: ongoingCount,
+      percentage: Math.round((ongoingCount / baseForPercentages) * 100),
       icon: <RefreshIcon />,
       toneText: "text-[#0094B6]",
       toneBg: "bg-[#EAF7FA]",
       toneChip: "bg-[#EAF7FA] text-[#087C99]",
       glowColor: "after:bg-[#0094B6]/[0.06]",
       barColor: "bg-gradient-to-r from-[#0094B6] to-[#6CB3C4]",
-      subtext: "In active treatment / wash",
+      subtext: "In active workflow",
     },
     {
       label: "Completed",
       valueKey: "Completed",
-      count: statusCounts.Completed,
-      percentage: Math.round((statusCounts.Completed / calculatedTotal) * 100),
+      count: completedCount,
+      percentage: Math.round((completedCount / baseForPercentages) * 100),
       icon: <CheckCircleIcon />,
       toneText: "text-[#527D23]",
       toneBg: "bg-[#EFF8E6]",
       toneChip: "bg-[#EFF8E6] text-[#527D23]",
       glowColor: "after:bg-[#7CB82F]/10",
       barColor: "bg-gradient-to-r from-[#6FA62C] to-[#A2CF68]",
-      subtext: "Finished & quality checked",
+      subtext: "Ready for collection/dispatch",
     },
     {
       label: "Delivered",
       valueKey: "Delivered",
-      count: statusCounts.Delivered,
-      percentage: Math.round((statusCounts.Delivered / calculatedTotal) * 100),
+      count: deliveredCount,
+      percentage: Math.round((deliveredCount / baseForPercentages) * 100),
       icon: <TruckIcon />,
       toneText: "text-[#1C3B57]",
       toneBg: "bg-[#EEF3F6]",
       toneChip: "bg-[#EEF3F6] text-[#1C3B57]",
       glowColor: "after:bg-[#1C3B57]/[0.07]",
       barColor: "bg-gradient-to-r from-[#677B88] to-[#9DAAB2]",
-      subtext: "Handed over to customer",
+      subtext: "Order fulfilled",
+    },
+    {
+      label: "Rejected",
+      valueKey: "Rejected",
+      count: rejectedCount,
+      percentage: Math.round((rejectedCount / baseForPercentages) * 100),
+      icon: <BanIcon />,
+      toneText: "text-[#A74A4A]",
+      toneBg: "bg-[#FDF2F2]",
+      toneChip: "bg-[#FDF2F2] text-[#A74A4A]",
+      glowColor: "after:bg-[#A74A4A]/10",
+      barColor: "bg-gradient-to-r from-[#A74A4A] to-[#D46B6B]",
+      subtext: "Cancelled or defect return",
     },
   ];
 
@@ -213,7 +230,7 @@ export default async function OrdersPage({ searchParams }) {
             </p>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#7CB82F]/20 bg-[#7CB82F]/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#557C2D]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#7CB82F] shadow-[0_0_0_4px_rgba(124,184,47,0.12)]" />
-              Live Queue
+              Live Ledger
             </span>
           </div>
 
@@ -222,11 +239,11 @@ export default async function OrdersPage({ searchParams }) {
           </h1>
 
           <p className="mt-3 max-w-[640px] text-[13px] leading-6 text-[#6D7E8A]">
-            Real-time pipeline monitoring, status tracking, customer garment assignments, and fulfillment milestones.
+            Real-time pipeline monitoring, status tracking, price adjustments in LKR, and customer completion milestones.
           </p>
         </div>
 
-        {/* Live Filter Indicator */}
+        {/* Active Filter Scope Pill */}
         <div className="flex items-center gap-2 rounded-2xl border border-[#E5ECEF] bg-white/90 p-3 shadow-[0_10px_30px_rgba(28,59,87,0.05)] max-sm:w-full">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#EAF7FA] text-[#0094B6] [&>svg]:h-5 [&>svg]:w-5">
             <OrdersIcon />
@@ -243,9 +260,9 @@ export default async function OrdersPage({ searchParams }) {
       </section>
 
       {/* =====================================================
-          STATUS KPI CARDS (INTERACTIVE & CLICKABLE)
+          STATUS KPI CARDS (6 RESPONSIVE CARDS)
       ===================================================== */}
-      <section className="grid grid-cols-5 gap-3.5 max-[1400px]:grid-cols-3 max-[1000px]:grid-cols-2 max-sm:grid-cols-1">
+      <section className="grid grid-cols-6 gap-3.5 max-[1500px]:grid-cols-3 max-[900px]:grid-cols-2 max-sm:grid-cols-1">
         {statusKpis.map((kpi) => {
           const isSelected = status === kpi.valueKey;
 
@@ -261,7 +278,6 @@ export default async function OrdersPage({ searchParams }) {
                   : "border-[#E5ECEF] shadow-[0_12px_35px_rgba(28,59,87,0.065)]"
               }`}
             >
-              {/* Top row: Icon + Status Tag */}
               <div className="relative z-10 flex items-center justify-between">
                 <div
                   className={`grid h-10 w-10 place-items-center rounded-[12px] ${kpi.toneBg} ${kpi.toneText} [&>svg]:h-5 [&>svg]:w-5`}
@@ -275,7 +291,6 @@ export default async function OrdersPage({ searchParams }) {
                 </span>
               </div>
 
-              {/* Metric Value */}
               <div className="relative z-10 mt-3.5">
                 <div className="text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#7A8C96]">
                   {kpi.label}
@@ -284,7 +299,6 @@ export default async function OrdersPage({ searchParams }) {
                   {kpi.count.toLocaleString()}
                 </div>
 
-                {/* Progress bar for status weight */}
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#EDF2F3]">
                     <div
@@ -311,7 +325,6 @@ export default async function OrdersPage({ searchParams }) {
       ===================================================== */}
       <section className="rounded-[22px] border border-[#E5ECEF] bg-white/95 p-4 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Segmented Quick Status Switcher */}
           <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[#E5ECEF] bg-[#FAFDFD] p-1.5 max-sm:w-full max-sm:justify-between">
             {statusKpis.map((tab) => {
               const isActive = status === tab.valueKey;
@@ -331,7 +344,6 @@ export default async function OrdersPage({ searchParams }) {
             })}
           </div>
 
-          {/* Search Input Form */}
           <form method="GET" className="flex items-center gap-2 max-sm:w-full">
             {status !== "All" && <input type="hidden" name="status" value={status} />}
 
@@ -371,7 +383,6 @@ export default async function OrdersPage({ searchParams }) {
           ORDERS LIST PANEL
       ===================================================== */}
       <section className="overflow-hidden rounded-[22px] border border-[#E5ECEF] bg-white/95 shadow-[0_14px_40px_rgba(28,59,87,0.08)]">
-        {/* Panel Header */}
         <div className="flex items-center justify-between gap-4 border-b border-[#E8EEF0] px-5 py-4 max-sm:flex-col max-sm:items-start">
           <div>
             <div className="text-[9px] font-extrabold uppercase tracking-[0.14em] text-[#0094B6]">
@@ -395,7 +406,7 @@ export default async function OrdersPage({ searchParams }) {
           </div>
         </div>
 
-        {/* Interactive Orders Client Component */}
+        {/* Embedded OrdersClient */}
         <div className="p-5">
           <OrdersClient orders={data.orders} />
         </div>
@@ -409,7 +420,6 @@ export default async function OrdersPage({ searchParams }) {
           </div>
 
           <div className="flex items-center gap-2 max-sm:w-full">
-            {/* Previous Page */}
             {data.hasPrevious ? (
               <Link
                 href={createHref({
@@ -430,7 +440,6 @@ export default async function OrdersPage({ searchParams }) {
               </span>
             )}
 
-            {/* Next Page */}
             {data.hasMore && data.nextCursor ? (
               <Link
                 href={createHref({
