@@ -1,35 +1,23 @@
+
 import Link from "next/link";
+
+/* =========================================================
+   DELUXE SHOE LAUNDRY
+   Premium Cinematic Editorial Hero
+   Next.js App Router + Tailwind CSS
+========================================================= */
 
 /* =========================================================
    ICONS
 ========================================================= */
 
-function ArrowRightIcon() {
-  return (
+function ArrowIcon({ diagonal = false }) {
+  return diagonal ? (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      className="h-4 w-4"
       aria-hidden="true"
-    >
-      <path
-        d="M5 12h14M14 7l5 5-5 5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ArrowUpRightIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
       className="h-4 w-4"
-      aria-hidden="true"
     >
       <path
         d="M7 17 17 7M9 7h8v8"
@@ -39,47 +27,76 @@ function ArrowUpRightIcon() {
         strokeLinejoin="round"
       />
     </svg>
-  );
-}
-
-function BoltIcon() {
-  return (
+  ) : (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      className="h-4 w-4"
       aria-hidden="true"
+      className="h-4 w-4"
     >
       <path
-        d="m13.5 2-8 12h6L10.5 22l8-12h-6L13.5 2Z"
+        d="M4 12h16m-7-7 7 7-7 7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SparkIcon() {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+      className="h-5 w-5"
+    >
+      <path
+        d="M16 2 19.6 12.4 30 16l-10.4 3.6L16 30l-3.6-10.4L2 16l10.4-3.6L16 2Z"
         fill="currentColor"
       />
     </svg>
   );
 }
 
-function LocationIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
+/* =========================================================
+   PREMIUM ANIMATED SCROLL INDICATOR
+========================================================= */
 
-      <circle
-        cx="12"
-        cy="9"
-        r="2.2"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-    </svg>
+function ScrollIndicator() {
+  return (
+    <div className="flex items-center gap-4">
+      {/* Animated downward arrow */}
+      <div className="relative flex h-14 w-7 items-center justify-center overflow-hidden">
+        <svg
+          viewBox="0 0 24 48"
+          fill="none"
+          className="deluxe-scroll-arrow h-12 w-6 text-[#B9E34B]"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 2V42M4 34L12 42L20 34"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+
+      {/* Scroll label */}
+      <div className="flex flex-col gap-1">
+        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-white/75 transition-colors duration-300 group-hover:text-white">
+          Scroll Down
+        </span>
+
+        <span className="text-[8px] font-medium uppercase tracking-[0.2em] text-white/35">
+          Discover Deluxe
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -92,415 +109,333 @@ export default function Hero() {
     "Hi Deluxe Shoe Laundry, I'd like to know more about your sneaker cleaning and restoration services."
   );
 
-  const whatsappUrl = `https://wa.me/94773560696?text=${whatsappMessage}`;
+  const whatsappUrl =
+    `https://wa.me/94773560696?text=${whatsappMessage}`;
 
   return (
     <section
       id="home"
-      className="relative overflow-hidden bg-white pt-[82px] text-[#06254B] lg:h-[100svh] lg:min-h-[700px] lg:pt-[92px]"
+      aria-labelledby="deluxe-hero-heading"
+      className="relative isolate min-h-[100svh] overflow-hidden bg-[#041327] text-white"
     >
       {/* =====================================================
-          BACKGROUND DECORATION
+          CINEMATIC VIDEO BACKGROUND
       ===================================================== */}
 
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-40 top-[18%] h-[380px] w-[380px] rounded-full bg-[#97C11F]/10 blur-[150px]"
-      />
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          poster="/video/hero-poster.webp"
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        >
+          <source
+            src="/video/deluxe-hero-mobile.mp4"
+            media="(max-width: 767px)"
+            type="video/mp4"
+          />
 
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-40 top-[-100px] h-[520px] w-[520px] rounded-full bg-[#06254B]/[0.06] blur-[150px]"
-      />
+          <source
+            src="/video/deluxe-hero.mp4"
+            type="video/mp4"
+          />
+        </video>
 
-      {/* Large background text */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute bottom-[-4vw] left-[-1vw] hidden font-heading text-[16vw] font-black uppercase leading-none tracking-[-0.07em] text-[#06254B]/[0.025] lg:block"
-      >
-        Revive
+        {/* Base cinematic darkness */}
+        <div className="absolute inset-0 bg-[#041327]/30" />
+
+        {/* Left-to-right cinematic gradient */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#041327] via-[#041327]/90 to-[#041327]/15 lg:via-[#041327]/55" />
+
+        {/* Vertical depth */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#041327] via-transparent to-[#041327]/50" />
+
+        {/* Subtle lime ambient light */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-48 top-[12%] h-[550px] w-[550px] rounded-full bg-[#97C11F]/[0.08] blur-[150px]"
+        />
       </div>
 
       {/* =====================================================
-          DESKTOP
+          SUBTLE EDITORIAL GRID TEXTURE
       ===================================================== */}
 
-      <div className="relative z-10 mx-auto hidden h-[calc(100svh-92px)] min-h-[608px] max-w-[1500px] px-12 lg:block xl:px-16">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-[1] opacity-[0.045]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(90deg, transparent 0px, transparent 79px, white 80px)",
+          backgroundSize: "80px 100%",
+        }}
+      />
+
+      {/* =====================================================
+          MAIN HERO LAYOUT
+      ===================================================== */}
+
+      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1600px] flex-col px-5 pb-7 pt-[112px] sm:px-8 lg:px-14 lg:pb-10 lg:pt-[130px] xl:px-20">
+
         {/* ===================================================
-            LEFT CONTENT
+            TOP EDITORIAL BRAND LABEL
         =================================================== */}
 
-        <div className="absolute left-12 top-1/2 z-30 w-[44%] -translate-y-1/2 xl:left-16">
-          {/* Eyebrow */}
-          <div className="mb-6 flex items-center gap-3">
-            <span className="h-[3px] w-10 rounded-full bg-[#97C11F]" />
+        <div className="deluxe-reveal flex items-center justify-between gap-4">
 
-            <span className="text-[9px] font-black uppercase tracking-[0.30em] text-[#06254B]/50">
-              Professional Sneaker Care · Malabe
+          <div className="flex items-center gap-3">
+            <span className="h-[2px] w-8 bg-[#B9E34B] sm:w-12" />
+
+            <span className="text-[9px] font-bold uppercase tracking-[0.23em] text-white/65 sm:text-[10px]">
+              Premium Sneaker Care
             </span>
           </div>
 
-          {/* Main heading */}
-          <h1 className="font-heading text-[clamp(5rem,7.3vw,8rem)] font-black uppercase leading-[0.74] tracking-[-0.06em] text-[#06254B]">
-            Don&apos;t
-            <br />
-            Replace.
-            <br />
+          <span className="hidden text-[9px] font-medium uppercase tracking-[0.25em] text-white/45 md:block">
+            Malabe, Sri Lanka
+          </span>
+        </div>
 
-            <span className="relative inline-block text-[#97C11F]">
-              Revive.
+        {/* ===================================================
+            HERO CONTENT
+        =================================================== */}
 
-              <span
-                aria-hidden="true"
-                className="absolute -right-7 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-[#06254B]"
-              />
+        <div className="flex flex-1 flex-col justify-center py-14 sm:py-20 lg:py-12">
+
+          {/* Micro heading */}
+          <div className="deluxe-reveal mb-6 flex items-center gap-3 [animation-delay:100ms] lg:mb-9">
+            <span className="text-[#B9E34B]">
+              <SparkIcon />
+            </span>
+
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-white/70">
+              The Art of Sneaker Revival
+            </p>
+          </div>
+
+          {/* =================================================
+              MAIN CINEMATIC HEADING
+          ================================================= */}
+
+          <h1
+            id="deluxe-hero-heading"
+            className="max-w-[1200px] font-heading font-black uppercase leading-[0.78] tracking-[-0.075em]"
+          >
+            <span className="deluxe-reveal block text-[clamp(3.5rem,11vw,11rem)] [animation-delay:160ms]">
+              DON'T
+            </span>
+
+            <span className="deluxe-reveal mt-[0.11em] block text-[clamp(3.5rem,11vw,11rem)] [animation-delay:260ms]">
+              REPLACE<span className="text-[#B9E34B]">.</span>
+            </span>
+
+            <span className="deluxe-reveal mt-[0.13em] flex items-center gap-[0.08em] text-[clamp(4.2rem,13.5vw,13rem)] text-[#B9E34B] [animation-delay:360ms]">
+              REVIVE
+              <span className="text-white">.</span>
             </span>
           </h1>
 
-          {/* Description */}
-          <div className="mt-8 flex max-w-[470px] gap-5">
-            <span className="mt-1 h-[66px] w-[2px] shrink-0 bg-[#06254B]/15" />
+          {/* =================================================
+              DESCRIPTION + ACTIONS
+          ================================================= */}
 
-            <p className="text-[15px] leading-7 text-[#06254B]/65">
-              Professional sneaker cleaning, restoration and care in
-              Malabe. Give your favourite pairs the attention they
-              deserve with a premium Deluxe finish.
-            </p>
-          </div>
+          <div className="mt-9 grid max-w-[1050px] gap-8 lg:mt-12 lg:grid-cols-[minmax(0,460px)_1fr] lg:items-end lg:gap-20">
 
-          {/* CTA */}
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group inline-flex items-center gap-5 rounded-full bg-[#06254B] px-7 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#0A315D] hover:shadow-[0_18px_45px_rgba(6,37,75,0.20)]"
-            >
-              WhatsApp Deluxe
+            {/* Description */}
+            <div className="deluxe-reveal [animation-delay:450ms]">
 
-              <span className="text-[#97C11F] transition-transform duration-300 group-hover:translate-x-1">
-                <ArrowRightIcon />
-              </span>
-            </a>
+              <div className="mb-4 h-[2px] w-12 bg-[#B9E34B]" />
 
-            <Link
-              href="#transformations"
-              className="group inline-flex items-center gap-3 rounded-full border border-[#06254B]/15 bg-white px-5 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-[#06254B] transition-all duration-300 hover:border-[#97C11F] hover:shadow-[0_10px_30px_rgba(6,37,75,0.06)]"
-            >
-              See Our Work
-
-              <span className="text-[#97C11F] transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1">
-                <ArrowUpRightIcon />
-              </span>
-            </Link>
-          </div>
-
-          {/* Utility */}
-          <div className="mt-9 flex flex-wrap gap-x-7 gap-y-3 border-t border-[#06254B]/10 pt-5">
-            <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-[#06254B]/50">
-              <span className="text-[#97C11F]">
-                <LocationIcon />
-              </span>
-
-              Near SLIIT Campus
+              <p className="max-w-[420px] text-[14px] font-normal leading-[1.8] text-white/75 sm:text-base">
+                Your favourite sneakers deserve more than a
+                quick clean. Experience professional cleaning,
+                restoration and detail-driven care that
+                brings every pair back to life.
+              </p>
             </div>
 
-            <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-[#06254B]/50">
-              <span className="text-[#97C11F]">
-                <BoltIcon />
-              </span>
+            {/* CTA buttons */}
+            <div className="deluxe-reveal flex flex-wrap items-center gap-4 [animation-delay:550ms]">
 
-              Same-Day Available
+              {/* WhatsApp */}
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex min-h-[58px] items-center justify-between gap-8 rounded-full bg-[#B9E34B] px-7 py-4 text-[10px] font-black uppercase tracking-[0.16em] text-[#041327] transition-all duration-300 hover:-translate-y-1 hover:bg-[#D0F46F] hover:shadow-[0_18px_50px_rgba(185,227,75,0.22)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#B9E34B] active:translate-y-0"
+              >
+                WhatsApp Us
+
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#041327] text-[#B9E34B] transition-transform duration-300 group-hover:rotate-[-40deg]">
+                  <ArrowIcon diagonal />
+                </span>
+              </a>
+
+              {/* Transformations */}
+              <Link
+                href="#transformations"
+                className="group inline-flex min-h-[56px] items-center gap-3 border-b border-white/35 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white transition-colors duration-300 hover:border-[#B9E34B] hover:text-[#B9E34B] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#B9E34B]"
+              >
+                See Transformations
+
+                <span className="transition-transform duration-300 group-hover:translate-x-1">
+                  <ArrowIcon />
+                </span>
+              </Link>
+
             </div>
           </div>
         </div>
 
         {/* ===================================================
-            VIDEO CANVAS
+            BOTTOM INFORMATION RAIL
         =================================================== */}
 
-        <div className="absolute bottom-[6%] right-[3%] top-[5%] z-10 w-[60%] overflow-hidden rounded-[42px] bg-[#06254B] shadow-[0_35px_100px_rgba(0,0,0,0.22)]">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster="/video/hero-poster.webp"
-            className="absolute inset-0 h-full w-full object-cover"
+        <div className="deluxe-reveal flex flex-col gap-6 border-t border-white/20 pt-6 [animation-delay:650ms] sm:flex-row sm:items-center sm:justify-between">
+
+          {/* Location + turnaround */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:gap-x-8">
+
+            <div className="flex items-center gap-2.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#B9E34B]" />
+
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-white/65">
+                Near SLIIT, Malabe
+              </span>
+            </div>
+
+            <span className="hidden h-4 w-px bg-white/20 sm:block" />
+
+            <div className="flex items-center gap-2.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#B9E34B]" />
+
+              <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-white/65">
+                Same-Day Options
+              </span>
+            </div>
+
+          </div>
+
+          {/* ===============================================
+              NEW ANIMATED SCROLL DOWN ARROW
+          =============================================== */}
+
+          <a
+            href="#services"
+            aria-label="Scroll down to explore our services"
+            className="group inline-flex w-fit items-center transition-opacity duration-300 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#B9E34B]"
           >
-            <source
-              src="/video/deluxe-hero.mp4"
-              type="video/mp4"
-            />
-          </video>
+            <ScrollIndicator />
+          </a>
 
-          {/* Bottom depth */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-[#06254B]/5 to-black/5" />
-
-          {/* White blend into left side */}
-          <div className="absolute inset-y-0 left-0 w-[30%] bg-gradient-to-r from-white/90 via-white/20 to-transparent" />
-
-          {/* =================================================
-              TOP BADGE
-          ================================================= */}
-
-          <div className="absolute right-6 top-6 flex items-center gap-3 rounded-full border border-white/15 bg-[#06254B]/70 px-4 py-2.5 backdrop-blur-xl">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#97C11F] opacity-50" />
-
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#97C11F]" />
-            </span>
-
-            <span className="text-[8px] font-black uppercase tracking-[0.22em] text-white">
-              Professional Sneaker Care
-            </span>
-          </div>
-
-          {/* =================================================
-              VIDEO CONTENT
-          ================================================= */}
-
-          <div className="absolute bottom-8 left-[32%] right-8">
-            <p className="text-[8px] font-black uppercase tracking-[0.26em] text-[#97C11F]">
-              Real Shoes · Real Transformations
-            </p>
-
-            <h2 className="font-heading mt-2 text-[clamp(2.8rem,4vw,4.8rem)] font-black uppercase leading-[0.84] tracking-[-0.04em] text-white">
-              Bring Back
-              <br />
-              The Pair You Love.
-            </h2>
-
-            <div className="mt-5 flex items-center gap-3 text-[8px] font-bold uppercase tracking-[0.20em] text-white/55">
-              <span className="h-px w-8 bg-[#97C11F]" />
-              Stay Fresh. Stay Deluxe.
-            </div>
-          </div>
-        </div>
-
-        {/* ===================================================
-            SAME-DAY FLOATING CARD
-        =================================================== */}
-
-        <div className="absolute bottom-[17%] left-[41%] z-40 w-[198px] rounded-[24px] border border-[#06254B]/[0.06] bg-white p-5 shadow-[0_22px_55px_rgba(0,0,0,0.14)]">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#97C11F] text-[#06254B] shadow-[0_8px_24px_rgba(151,193,31,0.22)]">
-            <BoltIcon />
-          </div>
-
-          <p className="mt-5 text-[8px] font-black uppercase tracking-[0.20em] text-[#06254B]/40">
-            Need Them Today?
-          </p>
-
-          <p className="font-heading mt-1 text-2xl font-black uppercase leading-[0.95] text-[#06254B]">
-            Same-Day
-            <br />
-            Available.
-          </p>
-        </div>
-
-        {/* ===================================================
-            24H CARD
-        =================================================== */}
-
-        <div className="absolute right-[7%] top-[15%] z-30 rounded-[20px] border border-white/15 bg-[#06254B]/90 px-5 py-4 text-white shadow-[0_16px_40px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-          <p className="font-heading text-4xl font-black leading-none text-[#97C11F]">
-            24H
-          </p>
-
-          <p className="mt-1 text-[7px] font-bold uppercase tracking-[0.16em] text-white/55">
-            1-Day Service
-          </p>
-        </div>
-
-        {/* ===================================================
-            SERVICE RAIL
-        =================================================== */}
-
-        <div className="absolute right-1 top-1/2 z-30 hidden -translate-y-1/2 rotate-180 items-center gap-6 [writing-mode:vertical-rl] xl:flex">
-          <span className="text-[8px] font-black uppercase tracking-[0.28em] text-[#06254B]/30">
-            Deep Clean
+          {/* Brand signature */}
+          <span className="text-[9px] font-black uppercase tracking-[0.28em] text-white/35">
+            Stay Fresh. Stay Deluxe.
           </span>
 
-          <span className="h-8 w-px bg-[#06254B]/15" />
-
-          <span className="text-[8px] font-black uppercase tracking-[0.28em] text-[#06254B]/30">
-            Restoration
-          </span>
-
-          <span className="h-8 w-px bg-[#06254B]/15" />
-
-          <span className="text-[8px] font-black uppercase tracking-[0.28em] text-[#06254B]/30">
-            Protection
-          </span>
         </div>
       </div>
 
       {/* =====================================================
-          MOBILE / TABLET
+          VERTICAL BRAND SIGNATURE
       ===================================================== */}
 
-      <div className="relative z-10 mx-auto px-5 pb-8 pt-8 sm:px-8 md:pt-10 lg:hidden">
-        {/* Eyebrow */}
-        <div className="flex items-center gap-3">
-          <span className="h-[3px] w-8 rounded-full bg-[#97C11F]" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[35%] right-5 z-10 hidden items-center gap-4 xl:flex"
+        style={{
+          writingMode: "vertical-rl",
+        }}
+      >
+        <span className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/40">
+          CLEAN · RESTORE · REVIVE
+        </span>
 
-          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-[#06254B]/50">
-            Professional Sneaker Care · Malabe
-          </span>
-        </div>
-
-        {/* Heading */}
-        <h1 className="font-heading mt-5 text-[clamp(4rem,18vw,7rem)] font-black uppercase leading-[0.76] tracking-[-0.055em] text-[#06254B]">
-          Don&apos;t
-          <br />
-          Replace.
-          <br />
-
-          <span className="text-[#97C11F]">
-            Revive.
-          </span>
-        </h1>
-
-        {/* Description */}
-        <p className="mt-6 max-w-md text-[13px] leading-6 text-[#06254B]/65 sm:text-sm sm:leading-7">
-          Professional sneaker cleaning, restoration and care in
-          Malabe. Give your favourite pairs the Deluxe treatment
-          they deserve.
-        </p>
-
-        {/* CTA */}
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center gap-4 rounded-full bg-[#06254B] px-6 py-4 text-[9px] font-black uppercase tracking-[0.15em] text-white transition-all duration-300 active:scale-[0.98]"
-          >
-            WhatsApp Us
-
-            <span className="text-[#97C11F]">
-              <ArrowRightIcon />
-            </span>
-          </a>
-
-          <Link
-            href="#transformations"
-            className="inline-flex items-center gap-2 rounded-full border border-[#06254B]/15 bg-white px-5 py-4 text-[9px] font-black uppercase tracking-[0.14em] text-[#06254B]"
-          >
-            Our Work
-
-            <span className="text-[#97C11F]">
-              <ArrowUpRightIcon />
-            </span>
-          </Link>
-        </div>
-
-        {/* =================================================
-            MOBILE VIDEO
-        ================================================= */}
-
-        <div className="relative mt-8 aspect-[4/5] max-h-[620px] overflow-hidden rounded-[28px] bg-[#06254B] shadow-[0_24px_60px_rgba(0,0,0,0.16)] sm:aspect-[16/10] sm:rounded-[34px]">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster="/video/hero-poster.webp"
-            className="absolute inset-0 h-full w-full object-cover"
-          >
-            <source
-              media="(max-width: 767px)"
-              src="/video/deluxe-hero-mobile.mp4"
-              type="video/mp4"
-            />
-
-            <source
-              src="/video/deluxe-hero.mp4"
-              type="video/mp4"
-            />
-          </video>
-
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/5" />
-
-          {/* Top */}
-          <div className="absolute left-4 right-4 top-4 flex items-start justify-between sm:left-6 sm:right-6 sm:top-6">
-            <div className="flex items-center gap-2 rounded-full border border-white/15 bg-[#06254B]/70 px-3 py-2 backdrop-blur-xl">
-              <span className="h-2 w-2 rounded-full bg-[#97C11F]" />
-
-              <span className="text-[7px] font-black uppercase tracking-[0.18em] text-white">
-                Deluxe Treatment
-              </span>
-            </div>
-
-            <div className="rounded-[16px] bg-[#06254B]/90 px-3 py-2 text-white backdrop-blur-xl">
-              <p className="font-heading text-2xl font-black leading-none text-[#97C11F]">
-                24H
-              </p>
-
-              <p className="mt-0.5 text-[6px] font-black uppercase tracking-[0.10em] text-white/55">
-                Service
-              </p>
-            </div>
-          </div>
-
-          {/* Bottom */}
-          <div className="absolute bottom-5 left-5 right-5 sm:bottom-7 sm:left-7 sm:right-7">
-            <p className="text-[7px] font-black uppercase tracking-[0.23em] text-[#97C11F]">
-              Real Shoes · Real Transformations
-            </p>
-
-            <h2 className="font-heading mt-2 text-3xl font-black uppercase leading-[0.88] tracking-[-0.025em] text-white sm:text-4xl">
-              Bring Back
-              <br />
-              The Pair You Love.
-            </h2>
-          </div>
-        </div>
-
-        {/* =================================================
-            MOBILE SERVICE INFO
-        ================================================= */}
-
-        <div className="mt-5 grid grid-cols-2 divide-x divide-[#06254B]/10 border-y border-[#06254B]/10 py-4">
-          <div className="flex items-center gap-3 pr-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#97C11F] text-[#06254B]">
-              <BoltIcon />
-            </span>
-
-            <div>
-              <p className="text-[6px] font-black uppercase tracking-[0.15em] text-[#06254B]/35">
-                Fast Service
-              </p>
-
-              <p className="mt-1 text-[8px] font-black uppercase leading-tight text-[#06254B] sm:text-[9px]">
-                Same-Day
-                <br />
-                Available
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pl-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#06254B] text-[#97C11F]">
-              <LocationIcon />
-            </span>
-
-            <div>
-              <p className="text-[6px] font-black uppercase tracking-[0.15em] text-[#06254B]/35">
-                Find Us
-              </p>
-
-              <p className="mt-1 text-[8px] font-black uppercase leading-tight text-[#06254B] sm:text-[9px]">
-                Near SLIIT
-                <br />
-                Malabe
-              </p>
-            </div>
-          </div>
-        </div>
+        <span className="h-14 w-px bg-[#B9E34B]/60" />
       </div>
+
+      {/* =====================================================
+          ANIMATION STYLES
+      ===================================================== */}
+
+      <style>{`
+
+        /* -----------------------------------------
+           HERO CONTENT ENTRANCE
+        ----------------------------------------- */
+
+        @keyframes deluxeReveal {
+          from {
+            opacity: 0;
+            transform: translateY(24px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .deluxe-reveal {
+          animation: deluxeReveal 0.9s
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        /* -----------------------------------------
+           SCROLL DOWN ARROW
+        ----------------------------------------- */
+
+        @keyframes deluxeArrowFloat {
+          0% {
+            transform: translateY(-8px);
+            opacity: 0;
+          }
+
+          25% {
+            opacity: 1;
+          }
+
+          70% {
+            opacity: 1;
+          }
+
+          100% {
+            transform: translateY(9px);
+            opacity: 0;
+          }
+        }
+
+        .deluxe-scroll-arrow {
+          animation: deluxeArrowFloat 2.2s
+            cubic-bezier(0.45, 0, 0.25, 1) infinite;
+        }
+
+        /* -----------------------------------------
+           REDUCED MOTION ACCESSIBILITY
+        ----------------------------------------- */
+
+        @media (prefers-reduced-motion: reduce) {
+          .deluxe-reveal,
+          .deluxe-scroll-arrow {
+            animation: none !important;
+          }
+
+          .deluxe-reveal {
+            opacity: 1;
+            transform: none;
+          }
+
+          .deluxe-scroll-arrow {
+            opacity: 1;
+            transform: none;
+          }
+        }
+
+      `}</style>
     </section>
   );
 }

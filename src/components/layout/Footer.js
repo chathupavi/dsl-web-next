@@ -58,7 +58,7 @@ export default function Footer() {
               <br />
 
               <span className="text-[#97C11F]">
-                Revive.
+                Review.
               </span>
             </h2>
 
