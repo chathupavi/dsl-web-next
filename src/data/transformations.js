@@ -7,8 +7,8 @@ export const transformations = [
     category: "Sneaker Care",
     description:
       "Explore this sneaker's condition before and after its Deluxe care treatment.",
-    before: "/transformations/shoe-01-before.webp",
-    after: "/transformations/shoe-01-after.webp",
+    before: "/images/transformations/sneaker-01-before.jpg",
+    after: "/images/transformations/sneaker-01-after.jpg",
     imageAlt: "Sneaker transformation case one",
   },
   {
@@ -18,8 +18,8 @@ export const transformations = [
     category: "Sneaker Care",
     description:
       "See the visible difference between the original condition and completed treatment.",
-    before: "/transformations/shoe-02-before.webp",
-    after: "/transformations/shoe-02-after.webp",
+    before: "/images/transformations/sneaker-02-before.jpg",
+    after: "/images/transformations/sneaker-02-after.jpg",
     imageAlt: "Sneaker transformation case two",
   },
 ];

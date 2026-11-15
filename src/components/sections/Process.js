@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -63,7 +62,41 @@ function CheckIcon() {
   );
 }
 
-function StepIcon({ id, className = "h-8 w-8" }) {
+/* Shared sneaker silhouette (side view, facing right, 24 x 14 box) */
+function Sneaker({ x = 0, y = 0, scale = 1 }) {
+  return (
+    <g
+      transform={`translate(${x} ${y}) scale(${scale})`}
+      strokeWidth={1.5 / scale}
+    >
+      <path d="M2 3.5V10a2 2 0 0 0 2 2h17a2 2 0 0 0 2-2v-1c0-1-.8-1.8-1.8-2L15 6 12 2.8c-.7-.8-1.8-.9-2.6-.3L6.5 4.5C5 4.5 3.5 4.3 2 3.5Z" />
+      <path d="M2 9.5h21" />
+      <path d="M9.5 4.8l2.2 2M7.5 5.8l2.2 2" />
+    </g>
+  );
+}
+
+/* Four point sparkle with absolute coordinates (animates in place) */
+function Sparkle({ cx, cy, r, delay = "0s" }) {
+  const s = r * 0.3;
+  return (
+    <path
+      className="dsl-ic-twinkle"
+      style={{ animationDelay: delay }}
+      d={`M${cx} ${cy - r}L${cx + s} ${cy - s}L${cx + r} ${cy}L${cx + s} ${cy + s}L${cx} ${cy + r}L${cx - s} ${cy + s}L${cx - r} ${cy}L${cx - s} ${cy - s}Z`}
+    />
+  );
+}
+
+/*
+  Shoe laundry icons. Animations only play when `animate` is true
+  (used for the active step), and are disabled for reduced motion.
+*/
+function StepIcon({
+  id,
+  className = "h-8 w-8",
+  animate = false,
+}) {
   const common = {
     stroke: "currentColor",
     strokeWidth: 1.5,
@@ -75,40 +108,64 @@ function StepIcon({ id, className = "h-8 w-8" }) {
     <svg
       viewBox="0 0 48 48"
       fill="none"
-      className={className}
+      className={`${className} ${animate ? "dsl-ic-live" : ""}`}
       aria-hidden="true"
     >
+      {/* 01 — SEND PHOTOS: phone viewfinder framing a sneaker + flying plane */}
       {id === "send" && (
         <g {...common}>
-          <rect x="12" y="4" width="24" height="40" rx="5" />
-          <path d="M21 9h6M20 38h8" />
-          <rect x="17" y="16" width="14" height="14" rx="2" />
-          <circle cx="22" cy="21" r="2" />
-          <path d="m18 28 4-4 3 3 3-4 3 4" />
+          <rect x="6" y="4" width="22" height="40" rx="4" />
+          <path d="M14 8h6M14 40h6" />
+          <Sneaker x={9.5} y={20} scale={0.62} />
+          <path
+            className="dsl-ic-blink"
+            d="M10 17v-3h3M21 14h3v3M10 31v3h3M21 34h3v-3"
+          />
+          <g className="dsl-ic-plane">
+            <path d="M45 5 32 11l5 3 3 5 5-14Z" />
+            <path d="m37 14 8-9" />
+          </g>
         </g>
       )}
 
+      {/* 02 — INSPECTION: magnifier scanning across a sneaker */}
       {id === "inspection" && (
         <g {...common}>
-          <circle cx="21" cy="21" r="13" />
-          <path d="m31 31 11 11M15 25l5-5 4 3 5-7" />
-          <circle cx="20" cy="20" r="2" />
+          <Sneaker x={4} y={16} scale={1.6} />
+          <circle className="dsl-ic-blink" cx="14" cy="30" r="0.9" fill="currentColor" />
+          <circle className="dsl-ic-blink" style={{ animationDelay: "0.6s" }} cx="29" cy="31" r="0.9" fill="currentColor" />
+          <circle className="dsl-ic-blink" style={{ animationDelay: "1.2s" }} cx="25" cy="23" r="0.9" fill="currentColor" />
+          <g className="dsl-ic-scan">
+            <circle cx="12" cy="18" r="8" />
+            <path d="m18 24 6 6" />
+          </g>
         </g>
       )}
 
+      {/* 03 — CARE / CLEANING: brush scrubbing a sneaker, bubbles rising */}
       {id === "care" && (
         <g {...common}>
-          <path d="M8 30c5-9 10-12 18-12l7 6 8 4c3 1 4 5 1 7H11c-4 0-6-2-3-5Z" />
-          <path d="M13 28c8 2 16 3 26 4M23 22l5 3M19 25l5 3" />
-          <path d="m35 5 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" />
+          <Sneaker x={5} y={24} scale={1.5} />
+          <g className="dsl-ic-scrub">
+            <rect x="14" y="12" width="14" height="5" rx="1.5" />
+            <path d="M17 17v4M21 17v4M25 17v4" />
+            <path d="M21 12V8q0-2 2-2h8" />
+          </g>
+          <circle className="dsl-ic-bubble" cx="36" cy="16" r="2.6" />
+          <circle className="dsl-ic-bubble" style={{ animationDelay: "0.9s" }} cx="41" cy="9" r="1.6" />
+          <circle className="dsl-ic-bubble" style={{ animationDelay: "1.7s" }} cx="8" cy="15" r="2" />
         </g>
       )}
 
+      {/* 04 — FINISH: fresh, shining sneaker with sparkles */}
       {id === "finish" && (
         <g {...common}>
-          <path d="M11 24 20 33 38 14" />
-          <circle cx="24" cy="24" r="20" />
-          <path d="M16 41v3m16-3v3" />
+          <Sneaker x={4} y={15} scale={1.6} />
+          <path d="M8 43h32" />
+          <path className="dsl-ic-shine" d="M15 30l4-6" />
+          <Sparkle cx={38} cy={9} r={4.5} />
+          <Sparkle cx={9} cy={10} r={3} delay="0.7s" />
+          <Sparkle cx={44} cy={26} r={2.5} delay="1.3s" />
         </g>
       )}
     </svg>
@@ -169,6 +226,7 @@ function DesktopTimeline({
                     <StepIcon
                       id={step.id}
                       className="h-8 w-8"
+                      animate={active}
                     />
                   )}
 
@@ -248,6 +306,7 @@ function MobileTimeline({
               <StepIcon
                 id={step.id}
                 className="h-6 w-6 sm:h-7 sm:w-7"
+                animate={active}
               />
             </span>
 
@@ -343,6 +402,7 @@ function ProcessDetail({
                 <StepIcon
                   id={step.id}
                   className="h-16 w-16 sm:h-20 sm:w-20"
+                  animate
                 />
               </span>
             </div>
@@ -391,7 +451,7 @@ function ProcessDetail({
 
             {/* Checklist */}
             <div className="mt-9 border-t border-[#06254B]/10">
-              {step.details.map((detail, index) => (
+              {step.details.map((detail) => (
                 <div
                   key={detail}
                   className="flex items-start gap-4 border-b border-[#06254B]/10 py-4"
@@ -619,9 +679,74 @@ export default function Process() {
           animation: dslProcessRing 2.8s ease-out infinite;
         }
 
+
+        /* ---------- Animated step icons (active step only) ---------- */
+        .dsl-ic-live .dsl-ic-plane {
+          animation: dslIcPlane 2.4s ease-in-out infinite;
+        }
+        .dsl-ic-live .dsl-ic-blink {
+          animation: dslIcBlink 2.4s ease-in-out infinite;
+        }
+        .dsl-ic-live .dsl-ic-scan {
+          animation: dslIcScan 2.6s ease-in-out infinite alternate;
+        }
+        .dsl-ic-live .dsl-ic-scrub {
+          animation: dslIcScrub 0.8s ease-in-out infinite alternate;
+        }
+        .dsl-ic-live .dsl-ic-bubble {
+          animation: dslIcBubble 2.6s ease-in infinite;
+        }
+        .dsl-ic-live .dsl-ic-twinkle {
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: dslIcTwinkle 2.2s ease-in-out infinite;
+        }
+        .dsl-ic-live .dsl-ic-shine {
+          animation: dslIcShine 2.8s ease-in-out infinite;
+        }
+
+        @keyframes dslIcPlane {
+          0% { transform: translate(-6px, 6px); opacity: 0; }
+          25% { opacity: 1; }
+          70% { transform: translate(2px, -2px); opacity: 1; }
+          100% { transform: translate(6px, -6px); opacity: 0; }
+        }
+        @keyframes dslIcBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.2; }
+        }
+        @keyframes dslIcScan {
+          from { transform: translateX(0); }
+          to { transform: translateX(18px); }
+        }
+        @keyframes dslIcScrub {
+          from { transform: translateX(-3px); }
+          to { transform: translateX(4px); }
+        }
+        @keyframes dslIcBubble {
+          0% { transform: translateY(4px); opacity: 0; }
+          30% { opacity: 1; }
+          100% { transform: translateY(-6px); opacity: 0; }
+        }
+        @keyframes dslIcTwinkle {
+          0%, 100% { transform: scale(0.35); opacity: 0.2; }
+          50% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes dslIcShine {
+          0%, 100% { transform: translateX(-4px); opacity: 0; }
+          50% { transform: translateX(10px); opacity: 1; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .dsl-process-enter,
-          .dsl-process-ring {
+          .dsl-process-ring,
+          .dsl-ic-live .dsl-ic-plane,
+          .dsl-ic-live .dsl-ic-blink,
+          .dsl-ic-live .dsl-ic-scan,
+          .dsl-ic-live .dsl-ic-scrub,
+          .dsl-ic-live .dsl-ic-bubble,
+          .dsl-ic-live .dsl-ic-twinkle,
+          .dsl-ic-live .dsl-ic-shine {
             animation: none !important;
           }
         }

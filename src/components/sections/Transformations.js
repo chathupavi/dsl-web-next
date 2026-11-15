@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { transformations } from "@/data/transformations";
 
@@ -78,49 +78,106 @@ function CompareIcon() {
 
 /* =========================================================
    IMAGE COMPARISON
-
-   BEFORE: Full background image
-   AFTER:  Clipped foreground image
-
-   The input range controls the visible AFTER percentage.
 ========================================================= */
 
 function BeforeAfterSlider({ item }) {
   const [position, setPosition] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // The image frame is replaced when a new case is chosen.
-  const imageRef = useRef(null);
+  const frameRef = useRef(null);
+  const draggingRef = useRef(false);
 
-  useEffect(() => {
-    setPosition(50);
-  }, [item.id]);
+  function updatePosition(clientX) {
+    const frame = frameRef.current;
+
+    if (!frame) return;
+
+    const rect = frame.getBoundingClientRect();
+
+    if (!rect.width) return;
+
+    const percentage =
+      ((clientX - rect.left) / rect.width) * 100;
+
+    setPosition(
+      Math.round(Math.min(100, Math.max(0, percentage)))
+    );
+  }
+
+  function handlePointerDown(event) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    draggingRef.current = true;
+    setIsDragging(true);
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    updatePosition(event.clientX);
+  }
+
+  function handlePointerMove(event) {
+    if (!draggingRef.current) return;
+
+    updatePosition(event.clientX);
+  }
+
+  function handlePointerUp() {
+    draggingRef.current = false;
+    setIsDragging(false);
+  }
+
+  function handleKeyboard(event) {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setPosition((current) => Math.max(0, current - 2));
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setPosition((current) => Math.min(100, current + 2));
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      setPosition(0);
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      setPosition(100);
+    }
+  }
 
   return (
     <div
-      ref={imageRef}
-      className="relative isolate aspect-[4/5] w-full select-none overflow-hidden bg-[#E8EBE7] sm:aspect-[5/4] lg:aspect-[16/10]"
-      style={{
-        touchAction: "pan-y",
-      }}
+      ref={frameRef}
+      className={`relative isolate aspect-[4/5] w-full select-none overflow-hidden bg-[#E8EBE7] sm:aspect-[5/4] lg:aspect-[16/10] ${
+        isDragging ? "cursor-ew-resize" : "cursor-col-resize"
+      }`}
+      style={{ touchAction: "pan-y" }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onLostPointerCapture={handlePointerUp}
     >
-      {/* ===============================================
-          BEFORE IMAGE — BASE LAYER
-      =============================================== */}
+      {/* BEFORE IMAGE */}
 
       <div className="absolute inset-0">
         <Image
           src={item.before}
           alt={`${item.imageAlt} before cleaning or restoration`}
           fill
+          priority
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1000px"
-          className="object-contain"
+          className="pointer-events-none object-contain"
           draggable={false}
         />
       </div>
 
-      {/* ===============================================
-          AFTER IMAGE — REVEALED FROM LEFT TO RIGHT
-      =============================================== */}
+      {/* AFTER IMAGE */}
 
       <div
         className="pointer-events-none absolute inset-0"
@@ -138,17 +195,13 @@ function BeforeAfterSlider({ item }) {
         />
       </div>
 
-      {/* ===============================================
-          SIDE GRADIENTS
-      =============================================== */}
+      {/* SIDE GRADIENTS */}
 
       <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-32 bg-gradient-to-r from-[#06254B]/20 to-transparent" />
 
       <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-32 bg-gradient-to-l from-[#06254B]/20 to-transparent" />
 
-      {/* ===============================================
-          IMAGE LABELS
-      =============================================== */}
+      {/* AFTER LABEL */}
 
       <div className="pointer-events-none absolute left-4 top-4 z-20 sm:left-7 sm:top-7">
         <span className="inline-flex items-center gap-2 border border-white/30 bg-[#06254B]/90 px-4 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] text-white backdrop-blur-sm">
@@ -157,6 +210,8 @@ function BeforeAfterSlider({ item }) {
         </span>
       </div>
 
+      {/* BEFORE LABEL */}
+
       <div className="pointer-events-none absolute right-4 top-4 z-20 sm:right-7 sm:top-7">
         <span className="inline-flex items-center gap-2 border border-[#06254B]/10 bg-white/95 px-4 py-2.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#06254B]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#97C11F]" />
@@ -164,32 +219,22 @@ function BeforeAfterSlider({ item }) {
         </span>
       </div>
 
-      {/* ===============================================
-          VERTICAL COMPARISON LINE
-      =============================================== */}
+      {/* COMPARISON LINE */}
 
       <div
         className="pointer-events-none absolute inset-y-0 z-30 w-[2px] -translate-x-1/2 bg-white shadow-[0_0_12px_rgba(0,0,0,0.25)]"
-        style={{
-          left: `${position}%`,
-        }}
+        style={{ left: `${position}%` }}
       >
-        {/* Top lime indicator */}
         <div className="absolute left-1/2 top-0 h-12 w-[3px] -translate-x-1/2 bg-[#97C11F]" />
 
-        {/* Bottom lime indicator */}
         <div className="absolute bottom-0 left-1/2 h-12 w-[3px] -translate-x-1/2 bg-[#97C11F]" />
       </div>
 
-      {/* ===============================================
-          PREMIUM COMPARISON HANDLE
-      =============================================== */}
+      {/* COMPARISON HANDLE */}
 
       <div
         className="pointer-events-none absolute top-1/2 z-40 -translate-x-1/2 -translate-y-1/2"
-        style={{
-          left: `${position}%`,
-        }}
+        style={{ left: `${position}%` }}
       >
         <div className="flex h-[58px] w-[58px] items-center justify-center rounded-full border-[3px] border-white bg-[#97C11F] text-[#06254B] shadow-[0_12px_35px_rgba(6,37,75,0.3)] sm:h-[68px] sm:w-[68px]">
           <div className="flex items-center gap-[5px]">
@@ -228,12 +273,7 @@ function BeforeAfterSlider({ item }) {
         </div>
       </div>
 
-      {/* ===============================================
-          ACCESSIBLE INTERACTION LAYER
-
-          Native range input supports touch, dragging,
-          keyboard arrows, Home and End.
-      =============================================== */}
+      {/* ACCESSIBLE SLIDER CONTROL */}
 
       <input
         type="range"
@@ -244,17 +284,14 @@ function BeforeAfterSlider({ item }) {
         onChange={(event) =>
           setPosition(Number(event.target.value))
         }
+        onKeyDown={handleKeyboard}
         aria-label={`Compare before and after images for ${item.title}`}
         aria-valuetext={`${position}% after image revealed`}
-        className="dsl-compare-range absolute inset-0 z-50 h-full w-full cursor-ew-resize opacity-0"
-        style={{
-          touchAction: "pan-y",
-        }}
+        className="absolute bottom-4 right-4 z-50 h-10 w-10 opacity-0 focus-visible:opacity-100"
+        style={{ pointerEvents: "auto" }}
       />
 
-      {/* ===============================================
-          BOTTOM INSTRUCTION
-      =============================================== */}
+      {/* DRAG INSTRUCTION */}
 
       <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap sm:bottom-7">
         <span className="inline-flex items-center gap-2 bg-[#06254B]/85 px-4 py-2.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white backdrop-blur-sm">
@@ -299,6 +336,7 @@ function ArchiveSelector({
                 fill
                 sizes="(max-width: 640px) 45vw, 260px"
                 className="object-contain transition-transform duration-700 group-hover:scale-[1.05]"
+                draggable={false}
               />
 
               <span
@@ -310,6 +348,12 @@ function ArchiveSelector({
               >
                 {item.number}
               </span>
+
+              {active && (
+                <span className="absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-[#97C11F] text-[#06254B]">
+                  <ArrowIcon diagonal className="h-3.5 w-3.5" />
+                </span>
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-2 px-3 py-4 sm:px-4">
@@ -363,9 +407,7 @@ export default function Transformations() {
     "Hi Deluxe Shoe Laundry, I've seen your sneaker transformations and would like to send photos of my shoes for an assessment."
   );
 
-  if (!selected) {
-    return null;
-  }
+  if (!selected) return null;
 
   return (
     <section
@@ -373,15 +415,9 @@ export default function Transformations() {
       aria-labelledby="transformations-heading"
       className="relative overflow-hidden bg-[#F1F0EB] py-20 text-[#06254B] sm:py-28 lg:py-32"
     >
-      {/* ===============================================
-          SECTION CONTAINER
-      =============================================== */}
-
       <div className="mx-auto max-w-[1500px] px-5 sm:px-8 lg:px-14 xl:px-16">
 
-        {/* =============================================
-            EDITORIAL HEADER
-        ============================================= */}
+        {/* EDITORIAL HEADER */}
 
         <div className="grid gap-9 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:gap-20">
           <div>
@@ -427,12 +463,9 @@ export default function Transformations() {
           </div>
         </div>
 
-        {/* =============================================
-            FEATURED ARCHIVE
-        ============================================= */}
+        {/* FEATURED ARCHIVE */}
 
         <div className="mt-12 overflow-hidden border border-[#06254B]/10 bg-white lg:mt-16">
-          {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#06254B]/10 px-5 py-5 sm:px-8">
             <div className="flex items-center gap-3">
               <span className="h-2 w-2 rounded-full bg-[#97C11F]" />
@@ -444,20 +477,17 @@ export default function Transformations() {
 
             <span className="font-mono text-[10px] tracking-[0.12em] text-[#06254B]/40">
               CASE {selected.number} /{" "}
-              {String(transformations.length).padStart(
-                2,
-                "0"
-              )}
+              {String(transformations.length).padStart(2, "0")}
             </span>
           </div>
 
-          {/* Main comparison */}
           <BeforeAfterSlider
             key={selected.id}
             item={selected}
           />
 
-          {/* Case details */}
+          {/* CASE DETAILS */}
+
           <div className="grid gap-7 border-t border-[#06254B]/10 px-6 py-8 sm:px-9 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-12 lg:py-10">
             <div>
               <div className="flex flex-wrap items-center gap-3">
@@ -470,9 +500,7 @@ export default function Transformations() {
 
               <h3 className="font-heading mt-4 text-[clamp(1.9rem,3.5vw,3.8rem)] font-black uppercase leading-[0.95] tracking-[-0.05em]">
                 {selected.title}
-                <span className="text-[#97C11F]">
-                  .
-                </span>
+                <span className="text-[#97C11F]">.</span>
               </h3>
 
               <p className="mt-4 max-w-[550px] text-[13px] leading-[1.85] text-[#06254B]/60">
@@ -492,9 +520,7 @@ export default function Transformations() {
           </div>
         </div>
 
-        {/* =============================================
-            ARCHIVE BROWSER
-        ============================================= */}
+        {/* ARCHIVE BROWSER */}
 
         <div className="mt-14 grid gap-8 lg:mt-20 lg:grid-cols-[0.38fr_0.62fr] lg:gap-16">
           <div>
@@ -521,10 +547,7 @@ export default function Transformations() {
             </p>
 
             <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.12em] text-[#06254B]/40">
-              {String(transformations.length).padStart(
-                2,
-                "0"
-              )}{" "}
+              {String(transformations.length).padStart(2, "0")}{" "}
               Pairs in This Collection
             </p>
           </div>
@@ -535,9 +558,7 @@ export default function Transformations() {
           />
         </div>
 
-        {/* =============================================
-            AUTHENTICITY NOTE
-        ============================================= */}
+        {/* AUTHENTICITY NOTE */}
 
         <div className="mt-12 flex flex-col gap-4 border-t border-[#06254B]/15 pt-6 sm:flex-row sm:items-start sm:justify-between sm:gap-10">
           <div className="flex max-w-[660px] items-start gap-3">
@@ -558,9 +579,7 @@ export default function Transformations() {
           </span>
         </div>
 
-        {/* =============================================
-            FINAL CONVERSION
-        ============================================= */}
+        {/* FINAL CONVERSION */}
 
         <div className="mt-16 grid overflow-hidden bg-[#06254B] text-white lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="px-7 py-10 sm:px-10 lg:px-12 lg:py-12">
@@ -597,6 +616,7 @@ export default function Transformations() {
             </a>
           </div>
         </div>
+
       </div>
     </section>
   );

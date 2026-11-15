@@ -129,7 +129,7 @@ export default function Hero() {
           loop
           playsInline
           preload="metadata"
-          poster="/video/hero-poster.webp"
+          poster="/video/hero-poster.jpg"
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-center"
         >

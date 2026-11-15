@@ -12,20 +12,20 @@ const LIME = "#97C11F";
 
 const LOCATION = {
   name: "Deluxe Shoe Laundry",
+  address: "45, 3 Isurupura Rd, Malabe, Sri Lanka",
   area: "Malabe",
   country: "Sri Lanka",
 
-  // Replace with your exact Google Maps Place embed URL.
   mapUrl:
-    "https://maps.google.com/maps?q=Deluxe%20Shoe%20Laundry%20Malabe%20Sri%20Lanka&t=&z=15&ie=UTF8&iwloc=&output=embed",
+    "https://maps.google.com/maps?q=45%2C%203%20Isurupura%20Rd%2C%20Malabe%2C%20Sri%20Lanka&t=&z=17&ie=UTF8&iwloc=&output=embed",
 
   directionsUrl:
     "https://www.google.com/maps/dir/?api=1&destination=" +
-    encodeURIComponent("Deluxe Shoe Laundry, Malabe, Sri Lanka"),
+    encodeURIComponent("45, 3 Isurupura Rd, Malabe, Sri Lanka"),
 
   mapsSearchUrl:
     "https://www.google.com/maps/search/?api=1&query=" +
-    encodeURIComponent("Deluxe Shoe Laundry Malabe Sri Lanka"),
+    encodeURIComponent("45, 3 Isurupura Rd, Malabe, Sri Lanka"),
 };
 
 /* =========================================================
@@ -56,7 +56,13 @@ function PinIcon({ className = "h-6 w-6" }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+      <circle
+        cx="12"
+        cy="10"
+        r="2.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
     </svg>
   );
 }
@@ -157,6 +163,7 @@ export default function Location() {
         <div className="relative mt-14 overflow-hidden bg-[#06254B] shadow-[0_30px_90px_rgba(6,37,75,0.12)] lg:mt-20">
 
           {/* Decorative background */}
+
           <div className="pointer-events-none absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-[#97C11F]/10 blur-[120px]" />
 
           <div
@@ -189,6 +196,7 @@ export default function Location() {
                 </div>
 
                 {/* Heading */}
+
                 <h3 className="font-heading mt-12 text-[clamp(2.7rem,4.5vw,5rem)] font-black uppercase leading-[0.88] tracking-[-0.065em]">
                   COME
                   <br />
@@ -206,6 +214,7 @@ export default function Location() {
                 </p>
 
                 {/* Address */}
+
                 <div className="mt-12 border-t border-white/15 pt-8">
 
                   <div className="flex items-center gap-3">
@@ -222,8 +231,8 @@ export default function Location() {
                     MALABE<span className="text-[#97C11F]">.</span>
                   </p>
 
-                  <p className="mt-2 text-[12px] text-white/50">
-                    Sri Lanka
+                  <p className="mt-3 max-w-[300px] text-[12px] leading-[1.8] text-white/60">
+                    {LOCATION.address}
                   </p>
 
                   <a
@@ -240,30 +249,27 @@ export default function Location() {
 
               {/* Directions CTA */}
 
-               {/* Compact Directions CTA */}
-               
-               <div className="mt-10 border-t border-white/15 pt-7">
-               
-                 <a
-                   href={LOCATION.directionsUrl}
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   className="group inline-flex min-h-[48px] items-center gap-5 rounded-full bg-[#97C11F] px-6 py-3 text-[9px] font-black uppercase tracking-[0.13em] text-[#06254B] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#B4DC40] hover:shadow-[0_10px_25px_rgba(151,193,31,0.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-                 >
-                   <span className="flex items-center gap-2.5">
-                     <NavigationIcon />
-                     Get Directions
-                   </span>
-               
-                   <ArrowIcon className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-                 </a>
-               
-                 <p className="mt-4 text-[9px] font-medium tracking-[0.08em] text-white/35">
-                   Find us in Malabe, Sri Lanka.
-                 </p>
-               
-               </div>
+              <div className="mt-10 border-t border-white/15 pt-7">
 
+                <a
+                  href={LOCATION.directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex min-h-[48px] items-center gap-5 rounded-full bg-[#97C11F] px-6 py-3 text-[9px] font-black uppercase tracking-[0.13em] text-[#06254B] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#B4DC40] hover:shadow-[0_10px_25px_rgba(151,193,31,0.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <NavigationIcon />
+                    Get Directions
+                  </span>
+
+                  <ArrowIcon className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+                </a>
+
+                <p className="mt-4 text-[9px] font-medium tracking-[0.08em] text-white/35">
+                  45, 3 Isurupura Rd, Malabe, Sri Lanka.
+                </p>
+
+              </div>
 
             </div>
 
@@ -274,6 +280,7 @@ export default function Location() {
             <div className="relative min-h-[400px] bg-[#E9EEE5] sm:min-h-[520px] lg:min-h-[720px]">
 
               {/* Map top floating badge */}
+
               <div className="absolute left-4 right-4 top-4 z-10 flex items-center justify-between gap-3 sm:left-7 sm:right-7 sm:top-7">
 
                 <div className="flex items-center gap-3 bg-white px-4 py-3 shadow-[0_8px_30px_rgba(6,37,75,0.12)]">
@@ -301,8 +308,9 @@ export default function Location() {
               </div>
 
               {/* Google Map */}
+
               <iframe
-                title="Find Deluxe Shoe Laundry in Malabe, Sri Lanka"
+                title="Deluxe Shoe Laundry - 45, 3 Isurupura Rd, Malabe, Sri Lanka"
                 src={LOCATION.mapUrl}
                 width="100%"
                 height="100%"
@@ -313,6 +321,7 @@ export default function Location() {
               />
 
               {/* Bottom floating map label */}
+
               <div className="absolute bottom-5 left-4 right-4 z-10 flex items-center justify-between gap-4 bg-white/95 p-4 shadow-[0_8px_35px_rgba(6,37,75,0.12)] backdrop-blur-md sm:bottom-7 sm:left-7 sm:right-7 sm:p-5">
 
                 <div className="flex min-w-0 items-center gap-3">
@@ -325,8 +334,8 @@ export default function Location() {
                       Deluxe Shoe Laundry
                     </p>
 
-                    <p className="mt-1 text-[10px] text-[#06254B]/50">
-                      Malabe, Sri Lanka
+                    <p className="mt-1 text-[10px] leading-[1.5] text-[#06254B]/50">
+                      45, 3 Isurupura Rd, Malabe
                     </p>
                   </div>
                 </div>

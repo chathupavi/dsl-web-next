@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { reviews } from "@/data/reviews";
 
 /* =========================================================
    DELUXE SHOE LAUNDRY
@@ -12,41 +13,8 @@ import { useState } from "react";
 const NAVY = "#06254B";
 const LIME = "#97C11F";
 
-const WHATSAPP_NUMBER = "94773560696";
-
-const reviews = [
-  {
-    id: 1,
-    name: "Customer Name",
-    location: "Malabe",
-    initials: "CN",
-    date: "Customer Review",
-    rating: 5,
-    featured: true,
-    review:
-      "The attention to detail was impressive. My sneakers received the care they needed, and the overall experience was excellent. Definitely a service I would recommend.",
-  },
-  {
-    id: 2,
-    name: "Customer Name",
-    location: "Colombo",
-    initials: "CN",
-    date: "Customer Review",
-    rating: 5,
-    review:
-      "Really appreciated the professional service and the care taken with my shoes. Everything was handled carefully, and the experience was smooth from beginning to end.",
-  },
-  {
-    id: 3,
-    name: "Customer Name",
-    location: "Sri Lanka",
-    initials: "CN",
-    date: "Customer Review",
-    rating: 5,
-    review:
-      "A great experience overall. The team was friendly, professional and attentive. It is good to have a dedicated sneaker care service like this.",
-  },
-];
+const GOOGLE_REVIEW_URL =
+  "https://search.google.com/local/writereview?placeid=ChIJY39pfFNX4joR7LWQqeoaQbc";
 
 /* =========================================================
    ICONS
@@ -113,9 +81,7 @@ function StarRating({ rating = 5 }) {
         <StarIcon
           key={index}
           className={`h-[15px] w-[15px] ${
-            index < rating
-              ? "opacity-100"
-              : "opacity-20"
+            index < rating ? "opacity-100" : "opacity-20"
           }`}
         />
       ))}
@@ -140,15 +106,17 @@ function ReviewCard({ review, index, active }) {
       }}
     >
       {/* Top */}
+
       <div className="flex items-center justify-between">
         <StarRating rating={review.rating} />
 
         <span className="font-heading text-[46px] font-black leading-none text-[#06254B]/[0.07]">
-          0{index + 1}
+          {String(index + 1).padStart(2, "0")}
         </span>
       </div>
 
       {/* Quote */}
+
       <div className="mt-8 flex-1">
         <div className="mb-5 text-[#97C11F]">
           <QuoteIcon />
@@ -160,6 +128,7 @@ function ReviewCard({ review, index, active }) {
       </div>
 
       {/* Customer */}
+
       <div className="mt-9 flex items-center gap-4 border-t border-[#06254B]/10 pt-6">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#06254B] font-heading text-[13px] font-black text-[#97C11F]">
           {review.initials}
@@ -203,15 +172,15 @@ function ReviewCard({ review, index, active }) {
 export default function Reviews() {
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Prevent rendering errors if no reviews are available.
+  if (!reviews?.length) return null;
+
   const activeReview = reviews[activeIndex];
 
-  const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    "Hi Deluxe Shoe Laundry! I'd like to share my experience with your service."
-  )}`;
-
   const changeReview = (direction) => {
-    setActiveIndex((current) =>
-      (current + direction + reviews.length) % reviews.length
+    setActiveIndex(
+      (current) =>
+        (current + direction + reviews.length) % reviews.length
     );
   };
 
@@ -223,12 +192,9 @@ export default function Reviews() {
     >
       <div className="mx-auto max-w-[1500px] px-5 sm:px-8 lg:px-14 xl:px-16">
 
-        {/* =========================================
-            SECTION HEADER
-        ========================================= */}
+        {/* SECTION HEADER */}
 
         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end lg:gap-16">
-
           <div>
             <div className="flex items-center gap-3">
               <span className="h-[2px] w-10 bg-[#97C11F]" />
@@ -265,15 +231,12 @@ export default function Reviews() {
           </div>
         </div>
 
-        {/* =========================================
-            FEATURED REVIEW
-        ========================================= */}
+        {/* FEATURED REVIEW */}
 
         <div
           key={activeReview.id}
           className="dsl-review-feature relative mt-14 overflow-hidden bg-[#06254B] lg:mt-20"
         >
-          {/* Decorative background */}
           <div className="pointer-events-none absolute -right-24 -top-36 h-[400px] w-[400px] rounded-full bg-[#97C11F]/10 blur-[100px]" />
 
           <div
@@ -288,6 +251,7 @@ export default function Reviews() {
           <div className="relative z-10 grid gap-10 p-7 sm:p-10 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:gap-16 lg:p-16">
 
             {/* Left */}
+
             <div>
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#97C11F]">
                 A Customer's Perspective
@@ -295,6 +259,7 @@ export default function Reviews() {
 
               <div className="mt-7 flex items-center gap-3">
                 <StarRating rating={activeReview.rating} />
+
                 <span className="font-mono text-[11px] text-white/50">
                   {activeReview.rating}.0 / 5
                 </span>
@@ -319,6 +284,7 @@ export default function Reviews() {
             </div>
 
             {/* Right */}
+
             <div className="relative">
               <div className="absolute -top-7 left-0 text-[#97C11F]/25">
                 <QuoteIcon />
@@ -347,9 +313,10 @@ export default function Reviews() {
                 </div>
 
                 {/* Navigation */}
+
                 <div className="flex items-center gap-4">
                   <span className="font-mono text-[10px] tracking-widest text-white/45">
-                    0{activeIndex + 1} / 0{reviews.length}
+                    {String(activeIndex + 1).padStart(2, "0")} / {String(reviews.length).padStart(2, "0")}
                   </span>
 
                   <button
@@ -375,9 +342,7 @@ export default function Reviews() {
           </div>
         </div>
 
-        {/* =========================================
-            REVIEW COLLECTION
-        ========================================= */}
+        {/* REVIEW COLLECTION */}
 
         <div className="mt-16 flex flex-wrap items-end justify-between gap-6 lg:mt-24">
           <div>
@@ -391,11 +356,12 @@ export default function Reviews() {
           </div>
 
           <span className="font-mono text-[10px] tracking-widest text-[#06254B]/40">
-            CUSTOMER VOICES / 001—003
+            CUSTOMER VOICES / 001—{String(reviews.length).padStart(3, "0")}
           </span>
         </div>
 
-        {/* Cards */}
+        {/* REVIEW CARDS */}
+
         <div className="mt-9 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {reviews.map((review, index) => (
             <button
@@ -403,6 +369,7 @@ export default function Reviews() {
               type="button"
               onClick={() => setActiveIndex(index)}
               aria-pressed={activeIndex === index}
+              aria-label={`View review by ${review.name}`}
               className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#97C11F]"
             >
               <ReviewCard
@@ -414,9 +381,7 @@ export default function Reviews() {
           ))}
         </div>
 
-        {/* =========================================
-            FINAL CTA
-        ========================================= */}
+        {/* GOOGLE REVIEW CTA */}
 
         <div className="mt-16 flex flex-col gap-8 border-t border-[#06254B]/15 pt-9 lg:mt-20 lg:flex-row lg:items-center lg:justify-between">
 
@@ -432,25 +397,53 @@ export default function Reviews() {
             </h3>
 
             <p className="mt-4 max-w-[510px] text-[13px] leading-7 text-[#06254B]/60">
-              We'd love to hear from you. Share your
-              experience and help others discover
-              professional sneaker care.
+              Enjoyed your Deluxe experience? Share
+              your feedback on Google. Your review
+              helps others discover professional
+              sneaker care and helps us continue improving.
             </p>
           </div>
 
           <a
-            href={whatsappUrl}
+            href={GOOGLE_REVIEW_URL}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label="Leave a Google review for Deluxe Shoe Laundry"
             className="group inline-flex min-h-[58px] items-center justify-between gap-7 self-start rounded-full bg-[#97C11F] px-7 py-4 text-[10px] font-black uppercase tracking-[0.12em] text-[#06254B] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#B4DC40] hover:shadow-[0_15px_35px_rgba(151,193,31,0.18)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#06254B] lg:self-auto"
           >
-            Share Your Experience
+            <span className="flex items-center gap-3">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.05 5.05 0 0 1-2.2 3.31v2.77h3.57c2.08-1.92 3.27-4.75 3.27-8.09Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.99 7.29-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.15v2.84A11 11 0 0 0 12 23Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.12-1.43.34-2.1V7.06H2.15A11 11 0 0 0 1 12c0 1.78.43 3.46 1.15 4.94l3.69-2.84Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.36c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.03 14.97 1 12 1a11 11 0 0 0-9.85 6.06l3.69 2.84C6.71 7.29 9.14 5.36 12 5.36Z"
+                />
+              </svg>
+
+              Leave a Google Review
+            </span>
 
             <ArrowIcon />
           </a>
         </div>
 
-        {/* Signature */}
+        {/* SIGNATURE */}
+
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[#06254B]/10 pt-5">
           <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#06254B]/40">
             Professional Sneaker Care · Malabe
@@ -462,9 +455,7 @@ export default function Reviews() {
         </div>
       </div>
 
-      {/* =========================================
-          CSS ANIMATIONS
-      ========================================= */}
+      {/* CSS ANIMATIONS */}
 
       <style jsx global>{`
         @keyframes dslReviewEnter {
